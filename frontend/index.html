@@ -11,12 +11,53 @@
 
   <!-- ═══════════════════════════════════════════════ LOGIN SCREEN -->
   <div class="login-screen" id="loginScreen">
+
+    <!-- Theme toggle visible before login -->
+    <div class="login-topbar">
+      <button class="theme-toggle" id="loginThemeToggle" title="Switch theme">
+        <span class="theme-icon">🌙</span>
+        <span class="theme-label">Dark</span>
+      </button>
+    </div>
+
+    <!-- Candlestick decorations -->
+    <div class="login-deco login-deco-left" aria-hidden="true">
+      <svg viewBox="0 0 170 260" xmlns="http://www.w3.org/2000/svg">
+        <line class="cs-down" x1="18" y1="118" x2="18" y2="215"/>
+        <rect class="cs-down" x="10" y="138" width="16" height="60"/>
+        <line class="cs-up"   x1="52" y1="58"  x2="52" y2="163"/>
+        <rect class="cs-up"   x="44" y="78"  width="16" height="70"/>
+        <line class="cs-down" x1="86" y1="74"  x2="86" y2="174"/>
+        <rect class="cs-down" x="78" y="90"  width="16" height="68"/>
+        <line class="cs-up"   x1="120" y1="38" x2="120" y2="124"/>
+        <rect class="cs-up"   x="112" y="54" width="16" height="55"/>
+        <line class="cs-up"   x1="154" y1="22" x2="154" y2="114"/>
+        <rect class="cs-up"   x="146" y="38" width="16" height="62"/>
+      </svg>
+    </div>
+
+    <div class="login-deco login-deco-right" aria-hidden="true">
+      <svg viewBox="0 0 170 260" xmlns="http://www.w3.org/2000/svg">
+        <line class="cs-up"   x1="16"  y1="44"  x2="16"  y2="136"/>
+        <rect class="cs-up"   x="8"   y="60"  width="16" height="60"/>
+        <line class="cs-down" x1="50"  y1="84"  x2="50"  y2="186"/>
+        <rect class="cs-down" x="42"  y="100" width="16" height="72"/>
+        <line class="cs-up"   x1="84"  y1="64"  x2="84"  y2="156"/>
+        <rect class="cs-up"   x="76"  y="80"  width="16" height="60"/>
+        <line class="cs-down" x1="118" y1="94"  x2="118" y2="196"/>
+        <rect class="cs-down" x="110" y="110" width="16" height="70"/>
+        <line class="cs-up"   x1="152" y1="54"  x2="152" y2="146"/>
+        <rect class="cs-up"   x="144" y="70"  width="16" height="60"/>
+      </svg>
+    </div>
+
+    <!-- Login card -->
     <div class="login-card">
       <div class="login-logo">
-        <span class="logo-mark">IT</span>
+        <span class="logo-mark login-logo-mark">IT</span>
         <h1 class="app-title">IllusTrade</h1>
       </div>
-      <p class="login-subtitle">Sign in to continue</p>
+      <p class="login-subtitle">Sign in to your account</p>
       <form class="login-form" id="loginForm" novalidate>
         <div class="form-group">
           <label class="form-label" for="loginUsername">Username</label>
@@ -33,6 +74,7 @@
       </form>
       <p class="login-invite">Access by invitation only.</p>
     </div>
+
   </div>
 
   <!-- ═══════════════════════════════════════════════ HEADER -->
