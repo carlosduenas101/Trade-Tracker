@@ -46,6 +46,132 @@ function toggleTheme() {
   applyTheme(current === 'dark' ? 'blossom' : 'dark');
 }
 
+/* ── Background canvas animation ───────────────────────────── */
+function initBgCanvas() {
+  const canvas = document.getElementById('bgCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const CW    = 10;       // candle body width (px)
+  const GAP   = 8;        // gap between candles
+  const PITCH = CW + GAP; // px per candle slot
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+
+  function themeColors() {
+    return document.documentElement.getAttribute('data-theme') === 'blossom'
+      ? { up: '#9b5de5', down: '#ff85a1' }
+      : { up: '#39ff14', down: '#ff1744' };
+  }
+
+  // Mean-reverting candle so the chart stays in the visible range
+  function newCandle(prev) {
+    const pull  = (100 - prev) * 0.07;
+    const close = Math.max(58, Math.min(142, prev + (Math.random() - 0.5) * 22 + pull));
+    const high  = Math.max(prev, close) + Math.random() * 7 + 1;
+    const low   = Math.min(prev, close) - Math.random() * 7 - 1;
+    return { open: prev, high, low, close };
+  }
+
+  function makeRow(cy, hFrac, speed) {
+    const range = canvas.height * hFrac * 0.5; // px for ±42 price units
+    const data  = [];
+    let price   = 85 + Math.random() * 30;
+    const need  = Math.ceil((canvas.width + PITCH * 8) / PITCH);
+    for (let i = 0; i < need; i++) {
+      data.push(newCandle(price));
+      price = data[data.length - 1].close;
+    }
+    return { cy, range, speed, data, offset: 0 };
+  }
+
+  let rows = [];
+  function buildRows() {
+    rows = [
+      makeRow(canvas.height * 0.30, 0.30, 0.30),
+      makeRow(canvas.height * 0.72, 0.22, 0.50),
+    ];
+  }
+  buildRows();
+
+  function drawCandle(x, c, cy, range, col) {
+    const scale = range / 42;
+    const color = c.close >= c.open ? col.up : col.down;
+    const mid   = cy;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + CW / 2, mid - (c.high - 100) * scale);
+    ctx.lineTo(x + CW / 2, mid - (c.low  - 100) * scale);
+    ctx.stroke();
+
+    const bTop = mid - (Math.max(c.open, c.close) - 100) * scale;
+    const bH   = Math.max(Math.abs(c.close - c.open) * scale, 1.5);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, bTop, CW, bH);
+  }
+
+  function drawTrend(row, col) {
+    const { data, cy, range, offset } = row;
+    const scale = range / 42;
+    ctx.strokeStyle = col.up;
+    ctx.lineWidth   = 1.2;
+    ctx.setLineDash([5, 8]);
+    ctx.beginPath();
+    let first = true;
+    data.forEach((c, i) => {
+      const x = i * PITCH - offset + CW / 2;
+      if (x < -PITCH || x > canvas.width + PITCH) return;
+      const y = cy - (c.close - 100) * scale;
+      first ? (ctx.moveTo(x, y), first = false) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  let rafId;
+  function frame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const col = themeColors();
+
+    rows.forEach(row => {
+      row.offset += row.speed;
+
+      // Drop candles scrolled off the left
+      while (row.data.length && (PITCH - row.offset) < -PITCH * 2) {
+        row.data.shift();
+        row.offset -= PITCH;
+      }
+      // Fill candles on the right
+      while (row.data.length * PITCH - row.offset < canvas.width + PITCH * 6) {
+        const last = row.data.length ? row.data[row.data.length - 1].close : 100;
+        row.data.push(newCandle(last));
+      }
+
+      ctx.globalAlpha = 0.18;
+      row.data.forEach((c, i) => {
+        const x = i * PITCH - row.offset;
+        if (x < -PITCH * 2 || x > canvas.width + PITCH) return;
+        drawCandle(x, c, row.cy, row.range, col);
+      });
+
+      ctx.globalAlpha = 0.09;
+      drawTrend(row, col);
+    });
+
+    ctx.globalAlpha = 1;
+    rafId = requestAnimationFrame(frame);
+  }
+  frame();
+
+  window.addEventListener('resize', () => { resize(); buildRows(); });
+}
+
 /* ── State ─────────────────────────────────────────────────── */
 const state = {
   trades: [],
@@ -1454,6 +1580,7 @@ async function init() {
   applyTheme(localStorage.getItem(_THEME_KEY) || 'dark');
   document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
   document.getElementById('loginThemeToggle')?.addEventListener('click', toggleTheme);
+  initBgCanvas();
 
   // Always wire the login form first (it's in the DOM from page load)
   bindLoginEvents();

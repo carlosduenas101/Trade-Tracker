@@ -211,10 +211,20 @@ body {
 .connection-status.connected .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .connection-status.error .status-dot     { background: var(--red); box-shadow: 0 0 6px var(--red); }
 
+/* ── Background canvas ──────────────────────────────────────── */
+#bgCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
 /* ════════════════════════════════════════════════════════════
    MAIN LAYOUT
    ════════════════════════════════════════════════════════════ */
 .main-content {
+  position: relative;
+  z-index: 1;
   max-width: 1440px;
   margin: 0 auto;
   padding: 24px;
@@ -842,7 +852,7 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(0,0,0,.7);
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -857,15 +867,29 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 
 .modal {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
+  background: rgba(8, 8, 8, 0.74);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 560px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: var(--shadow-modal);
+  box-shadow: var(--shadow-modal), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   animation: slideUp 0.2s ease;
+}
+
+[data-theme="blossom"] .modal {
+  background: rgba(253, 246, 255, 0.70);
+  border: 1px solid rgba(155, 93, 229, 0.18);
+  border-top: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: var(--shadow-modal), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="blossom"] .modal-backdrop {
+  background: rgba(80, 30, 130, 0.20);
 }
 
 .modal--sm { max-width: 420px; padding: 24px; }
