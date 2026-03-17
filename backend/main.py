@@ -220,7 +220,7 @@ _CSV_COLUMNS = [
     "open_time", "close_time", "notes",
 ]
 
-@app.get("/trades/template", tags=["Trades"], include_in_schema=True)
+@app.get("/template", tags=["Trades"], include_in_schema=True)
 def download_template():
     """Return a blank CSV file with the correct column headers."""
     output = io.StringIO()

@@ -958,7 +958,7 @@ function bindEvents() {
   // Template download
   dom.templateBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    window.open(`${API_BASE}/trades/template`, '_blank');
+    window.open(`${API_BASE}/template`, '_blank');
   });
 
   // Live quantity unit + coin conversion
