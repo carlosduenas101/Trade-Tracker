@@ -27,12 +27,17 @@ function clearAuth() {
 /* ── Theme ─────────────────────────────────────────────────── */
 const _THEME_KEY = 'tt_theme';
 
+const _THEME_META = {
+  dark:    { icon: '🌙', label: 'Dark'    },
+  purple:  { icon: '🟣', label: 'Purple'  },
+  blossom: { icon: '🌸', label: 'Blossom' },
+};
+const _THEME_CYCLE = ['dark', 'purple', 'blossom'];
+
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(_THEME_KEY, theme);
-  const isBlossom = theme === 'blossom';
-  const icon  = isBlossom ? '🌸' : '🌙';
-  const label = isBlossom ? 'Blossom' : 'Dark';
+  const { icon, label } = _THEME_META[theme] || _THEME_META.dark;
   ['themeToggle', 'loginThemeToggle'].forEach(id => {
     const btn = document.getElementById(id);
     if (!btn) return;
@@ -43,7 +48,8 @@ function applyTheme(theme) {
 
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme') || 'dark';
-  applyTheme(current === 'dark' ? 'blossom' : 'dark');
+  const idx     = _THEME_CYCLE.indexOf(current);
+  applyTheme(_THEME_CYCLE[(idx + 1) % _THEME_CYCLE.length]);
 }
 
 /* ── Background canvas animation ───────────────────────────── */
@@ -63,9 +69,10 @@ function initBgCanvas() {
   resize();
 
   function themeColors() {
-    return document.documentElement.getAttribute('data-theme') === 'blossom'
-      ? { up: '#9b5de5', down: '#ff85a1' }
-      : { up: '#39ff14', down: '#ff1744' };
+    const t = document.documentElement.getAttribute('data-theme');
+    if (t === 'blossom') return { up: '#9b5de5', down: '#ff85a1' };
+    if (t === 'purple')  return { up: '#7b2fff', down: '#e040fb' };
+    return { up: '#39ff14', down: '#ff1744' };
   }
 
   // Mean-reverting candle so the chart stays in the visible range
