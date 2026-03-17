@@ -27,11 +27,8 @@ from config import DATABASE_URL
 # Engine & session factory
 # ---------------------------------------------------------------------------
 
-engine = create_engine(
-    DATABASE_URL,
-    # check_same_thread is only relevant for SQLite; harmless for other DBs
-    connect_args={"check_same_thread": False},
-)
+_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=_connect_args)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -86,6 +83,7 @@ class Trade(Base):
     leverage = Column(Float, nullable=True)
     notes = Column(String(1000), nullable=True)
     source = Column(String(10), nullable=False, default="manual")
+    entries = Column(Integer, nullable=True, default=1)
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +107,7 @@ class TradeBase(BaseModel):
     leverage: Optional[float] = Field(None, ge=1)
     notes: Optional[str] = Field(None, max_length=1000)
     source: str = Field("manual", pattern="^(manual|api)$")
+    entries: Optional[int] = Field(None, ge=1, description="Number of entries taken for this trade")
 
 
 class TradeCreate(TradeBase):
@@ -132,6 +131,7 @@ class TradeUpdate(BaseModel):
     leverage: Optional[float] = Field(None, ge=1)
     notes: Optional[str] = Field(None, max_length=1000)
     source: Optional[str] = Field(None, pattern="^(manual|api)$")
+    entries: Optional[int] = Field(None, ge=1)
 
 
 class TradeResponse(TradeBase):
@@ -142,6 +142,7 @@ class TradeResponse(TradeBase):
     roe: Optional[float]
     is_win: bool
     duration_minutes: int
+    entries: Optional[int]
 
     model_config = {"from_attributes": True}
 

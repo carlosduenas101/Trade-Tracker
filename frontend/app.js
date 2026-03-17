@@ -31,28 +31,31 @@ const dom = {
   addTradeBtn:    $('addTradeBtn'),
 
   // Metrics
-  metricWinRate:     $('metricWinRate'),
-  metricWinRateSub:  $('metricWinRateSub'),
-  metricPnl:         $('metricPnl'),
-  metricPnlSub:      $('metricPnlSub'),
-  metricDrawdown:    $('metricDrawdown'),
-  metricDrawdownSub: $('metricDrawdownSub'),
-  metricRR:          $('metricRR'),
-  metricRRSub:       $('metricRRSub'),
-  metricStreak:      $('metricStreak'),
-  metricStreakSub:   $('metricStreakSub'),
-  metricTotal:       $('metricTotal'),
-  metricTotalSub:    $('metricTotalSub'),
-  metricAvgRoe:      $('metricAvgRoe'),
-  metricAvgRoeSub:   $('metricAvgRoeSub'),
+  metricWinRate:        $('metricWinRate'),
+  metricWinRateSub:     $('metricWinRateSub'),
+  metricPnl:            $('metricPnl'),
+  metricPnlSub:         $('metricPnlSub'),
+  metricDrawdown:       $('metricDrawdown'),
+  metricDrawdownSub:    $('metricDrawdownSub'),
+  metricRR:             $('metricRR'),
+  metricRRSub:          $('metricRRSub'),
+  metricStreak:         $('metricStreak'),
+  metricStreakSub:      $('metricStreakSub'),
+  metricTotal:          $('metricTotal'),
+  metricTotalSub:       $('metricTotalSub'),
+  metricAvgRoe:         $('metricAvgRoe'),
+  metricAvgRoeSub:      $('metricAvgRoeSub'),
+  metricAvgEntries:     $('metricAvgEntries'),
+  metricAvgEntriesSub:  $('metricAvgEntriesSub'),
 
-  cardWinRate:  $('card-winRate'),
-  cardPnl:      $('card-pnl'),
-  cardDrawdown: $('card-drawdown'),
-  cardRR:       $('card-rr'),
-  cardStreak:   $('card-streak'),
-  cardTotal:    $('card-total'),
-  cardAvgRoe:   $('card-avgRoe'),
+  cardWinRate:    $('card-winRate'),
+  cardPnl:        $('card-pnl'),
+  cardDrawdown:   $('card-drawdown'),
+  cardRR:         $('card-rr'),
+  cardStreak:     $('card-streak'),
+  cardTotal:      $('card-total'),
+  cardAvgRoe:     $('card-avgRoe'),
+  cardAvgEntries: $('card-avgEntries'),
 
   // Table
   tradesBody:   $('tradesBody'),
@@ -84,6 +87,7 @@ const dom = {
   fOpenTime:  $('fOpenTime'),
   fCloseTime: $('fCloseTime'),
   fNotes:     $('fNotes'),
+  fEntries:   $('fEntries'),
   qtyUnit:           $('qtyUnit'),
   qtyConversion:     $('qtyConversion'),
   qtyConverted:      $('qtyConverted'),
@@ -95,6 +99,11 @@ const dom = {
   confirmClose:     $('confirmClose'),
   confirmCancelBtn: $('confirmCancelBtn'),
   confirmDeleteBtn: $('confirmDeleteBtn'),
+
+  // Import
+  importBtn:    $('importBtn'),
+  templateBtn:  $('templateBtn'),
+  csvFileInput: $('csvFileInput'),
 
   // Toast
   toastContainer: $('toastContainer'),
@@ -239,7 +248,7 @@ function showToast(msg, type = 'info', duration = 3500) {
  */
 async function fetchMetrics(startDate, endDate) {
   // Skeleton loading
-  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe];
+  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries];
   cards.forEach(el => { el.textContent = '···'; el.classList.add('skeleton'); });
 
   try {
@@ -316,6 +325,12 @@ function renderMetrics(data) {
   dom.metricAvgRoe.classList.remove('skeleton');
   dom.metricAvgRoeSub.textContent = 'Per trade average';
   applyCardColor(dom.cardAvgRoe, avg_roe > 0 ? 'positive' : avg_roe < 0 ? 'negative' : '');
+
+  // Avg Entries
+  const avg_entries = data.avg_entries;
+  dom.metricAvgEntries.textContent = avg_entries != null && avg_entries > 0 ? Number(avg_entries).toFixed(1) : '—';
+  dom.metricAvgEntries.classList.remove('skeleton');
+  dom.metricAvgEntriesSub.textContent = 'Entries per trade';
 }
 
 function applyCardColor(cardEl, type) {
@@ -550,6 +565,35 @@ async function deleteTrade(id) {
 }
 
 /* ════════════════════════════════════════════════════════════
+   CSV IMPORT
+   ════════════════════════════════════════════════════════════ */
+
+async function importCSV(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  dom.importBtn.disabled = true;
+  dom.importBtn.textContent = 'Importing…';
+
+  try {
+    const res = await fetch(`${API_BASE}/import`, { method: 'POST', body: formData });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const result = await res.json();
+    const msg = `Imported ${result.imported} trade(s).` +
+      (result.errors.length ? ` ${result.errors.length} row(s) skipped.` : '');
+    showToast(msg, result.errors.length ? 'info' : 'success', 6000);
+    if (result.errors.length) console.warn('Import errors:', result.errors);
+    await refreshAll();
+  } catch (err) {
+    showToast(`Import failed: ${err.message}`, 'error');
+  } finally {
+    dom.importBtn.disabled = false;
+    dom.importBtn.textContent = '↑ Import CSV';
+    dom.csvFileInput.value = '';
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
    SYNC EXCHANGE
    ════════════════════════════════════════════════════════════ */
 
@@ -734,6 +778,7 @@ function openEditModal(id) {
   dom.fRoe.value      = trade.roe ?? '';
   dom.fLeverage.value = trade.leverage ?? '';
   dom.fRR.value       = trade.risk_reward ?? '';
+  dom.fEntries.value  = trade.entries ?? '';
   dom.fNotes.value    = trade.notes ?? '';
 
   // Qty: reverse-convert for long (backend stores coin units)
@@ -795,6 +840,7 @@ function handleFormSubmit(e) {
   const roeRaw      = parseFloat(dom.fRoe.value);
   const leverageRaw = dom.fLeverage.value ? parseFloat(dom.fLeverage.value) : null;
   const rrRaw       = dom.fRR.value ? parseFloat(dom.fRR.value) : null;
+  const entriesRaw  = dom.fEntries.value ? parseInt(dom.fEntries.value, 10) : null;
   const openTime    = dom.fOpenTime.value;
   const closeTime   = dom.fCloseTime.value;
   const notes       = dom.fNotes.value.trim() || null;
@@ -831,6 +877,7 @@ function handleFormSubmit(e) {
     roe:         roeRaw,
     leverage:    leverageRaw,
     risk_reward: rrRaw,
+    entries:     entriesRaw,
     open_time:   new Date(openTime).toISOString(),
     close_time:  new Date(closeTime).toISOString(),
     notes,
@@ -900,6 +947,19 @@ function bindEvents() {
 
   // Add Trade button
   dom.addTradeBtn.addEventListener('click', openAddModal);
+
+  // CSV Import
+  dom.importBtn.addEventListener('click', () => dom.csvFileInput.click());
+  dom.csvFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) importCSV(file);
+  });
+
+  // Template download
+  dom.templateBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.open(`${API_BASE}/trades/template`, '_blank');
+  });
 
   // Live quantity unit + coin conversion
   dom.fSide.addEventListener('change', updateQtyConversion);

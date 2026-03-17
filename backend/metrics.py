@@ -80,6 +80,22 @@ def calculate_max_drawdown(trades: list[TradeItem]) -> float:
     return round(max_dd, 8)
 
 
+def calculate_avg_entries(trades: list[TradeItem]) -> float:
+    """
+    Calculate the average number of entries per trade.
+
+    Returns 0.0 when no trades have an entries value.
+    """
+    values = [
+        _get(t, "entries")
+        for t in trades
+        if _get(t, "entries") is not None
+    ]
+    if not values:
+        return 0.0
+    return round(sum(values) / len(values), 2)
+
+
 def calculate_avg_roe(trades: list[TradeItem]) -> float:
     """
     Calculate the average ROE % across all trades that have a roe value.
@@ -164,12 +180,18 @@ def get_all_metrics(trades: list[TradeItem]) -> dict:
     current_streak  int    — positive = wins, negative = losses
     total_trades    int    — number of trades in the dataset
     """
+    streak = calculate_streak(trades)
+    wins = sum(1 for t in trades if _get(t, "is_win", False))
     return {
         "win_rate": calculate_win_rate(trades),
         "total_pnl": calculate_total_pnl(trades),
         "max_drawdown": calculate_max_drawdown(trades),
         "avg_rr": calculate_avg_rr(trades),
         "avg_roe": calculate_avg_roe(trades),
-        "current_streak": calculate_streak(trades),
+        "avg_entries": calculate_avg_entries(trades),
+        "current_streak": streak,
+        "streak_type": "win" if streak > 0 else "loss" if streak < 0 else "",
         "total_trades": len(trades),
+        "winning_trades": wins,
+        "losing_trades": len(trades) - wins,
     }
