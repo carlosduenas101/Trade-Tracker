@@ -195,8 +195,8 @@ function initLoginCanvas() {
   function loginColors() {
     const t = document.documentElement.getAttribute('data-theme');
     if (t === 'blossom') return {
-      c1: '#9b5de5', fa1: 'rgba(155,93,229,0.22)', fb1: 'rgba(155,93,229,0)',
-      c2: '#ff85a1', fa2: 'rgba(255,133,161,0.10)', fb2: 'rgba(255,133,161,0)',
+      c1: '#9b5de5', fa1: 'rgba(155,93,229,0.40)', fb1: 'rgba(155,93,229,0)',
+      c2: '#ff85a1', fa2: 'rgba(255,133,161,0.22)', fb2: 'rgba(255,133,161,0)',
     };
     if (t === 'purple') return {
       c1: '#7b2fff', fa1: 'rgba(123,47,255,0.25)', fb1: 'rgba(123,47,255,0)',

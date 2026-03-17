@@ -1257,7 +1257,7 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 }
 
 [data-theme="blossom"] .login-card {
-  background: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 [data-theme="purple"] .login-card {
