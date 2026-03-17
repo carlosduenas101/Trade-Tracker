@@ -90,6 +90,55 @@
   --shadow-focus:   0 0 0 3px rgba(155, 93, 229, 0.28);
 }
 
+/* ── PURPLE THEME ───────────────────────────────────────────── */
+[data-theme="purple"] {
+  --bg-base:        #0d0d2b;
+  --bg-surface:     #12123a;
+  --bg-elevated:    #1a1a50;
+  --bg-hover:       #22225e;
+  --bg-input:       #0d0d2b;
+
+  --border-subtle:  #1e1e52;
+  --border-default: #2e2e72;
+  --border-focus:   #7b2fff;
+
+  --text-primary:   #e8e0ff;
+  --text-secondary: #a78bfa;
+  --text-muted:     #4a4a8a;
+
+  --accent-primary: #7b2fff;
+  --accent-hover:   #9d52ff;
+
+  --green:          #7b2fff;
+  --green-dim:      rgba(123, 47, 255, 0.13);
+  --green-border:   rgba(123, 47, 255, 0.38);
+
+  --red:            #e040fb;
+  --red-dim:        rgba(224, 64, 251, 0.13);
+  --red-border:     rgba(224, 64, 251, 0.38);
+
+  --yellow:         #c084fc;
+  --yellow-dim:     rgba(192, 132, 252, 0.13);
+
+  --sync-color:     #7b2fff;
+  --sync-hover:     #9d52ff;
+
+  --shadow-card:    0 1px 0 var(--border-subtle), 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-modal:   0 8px 40px rgba(0, 0, 0, 0.85);
+  --shadow-focus:   0 0 0 3px rgba(123, 47, 255, 0.35);
+}
+
+/* Purple-specific overrides */
+[data-theme="purple"] .btn-primary {
+  background: linear-gradient(135deg, #6b21ff, #a855f7);
+  border-color: transparent;
+  color: #fff;
+}
+[data-theme="purple"] .btn-primary:hover {
+  background: linear-gradient(135deg, #7b2fff, #b56cff);
+  border-color: transparent;
+}
+
 /* Hardcoded colours that need overriding in blossom */
 [data-theme="blossom"] .btn-primary { color: #fff; }
 [data-theme="blossom"] input[type="date"].input-field,
@@ -892,6 +941,19 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   background: rgba(80, 30, 130, 0.20);
 }
 
+[data-theme="purple"] .modal {
+  background: rgba(13, 13, 43, 0.80);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid rgba(123, 47, 255, 0.22);
+  border-top: 1px solid rgba(123, 47, 255, 0.50);
+  box-shadow: var(--shadow-modal), inset 0 1px 0 rgba(123, 47, 255, 0.12), 0 0 40px rgba(123, 47, 255, 0.10);
+}
+
+[data-theme="purple"] .modal-backdrop {
+  background: rgba(0, 0, 24, 0.60);
+}
+
 .modal--sm { max-width: 420px; padding: 24px; }
 
 .modal-header {
@@ -1186,6 +1248,13 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 
 [data-theme="blossom"] .login-card {
   background: rgba(255, 255, 255, 0.52);
+}
+
+[data-theme="purple"] .login-card {
+  background: rgba(13, 13, 43, 0.74);
+  border: 1px solid rgba(123, 47, 255, 0.30);
+  border-top: 2px solid #7b2fff;
+  box-shadow: var(--shadow-modal), 0 0 60px rgba(123, 47, 255, 0.20);
 }
 
 .login-logo {
