@@ -259,8 +259,12 @@ _COL_ALIASES = {
 
 
 def _normalise_row(row: dict) -> dict:
-    """Lowercase keys and apply aliases."""
-    return {_COL_ALIASES.get(k.strip().lower(), k.strip().lower()): v.strip() for k, v in row.items()}
+    """Lowercase + strip keys, apply aliases, strip values."""
+    return {
+        _COL_ALIASES.get(k.strip().lower(), k.strip().lower()): (v or '').strip()
+        for k, v in row.items()
+        if k is not None
+    }
 
 
 def _parse_float(val: str):
@@ -308,9 +312,15 @@ async def import_trades(file: UploadFile = File(...), db: Session = Depends(get_
     except UnicodeDecodeError:
         text = content.decode("latin-1")
 
-    # Auto-detect delimiter (tab or comma)
-    sample = text[:2048]
-    delimiter = '\t' if sample.count('\t') > sample.count(',') else ','
+    # Auto-detect delimiter by trying each until headers make sense
+    _required = {"symbol", "pnl", "open_time", "close_time"}
+    delimiter = ','
+    for _delim in ['\t', ',', ';', '|']:
+        _reader = csv.DictReader(io.StringIO(text), delimiter=_delim)
+        _headers = {(h or '').strip().lower() for h in (_reader.fieldnames or [])}
+        if _required.issubset(_headers):
+            delimiter = _delim
+            break
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     imported = 0
     errors = []
