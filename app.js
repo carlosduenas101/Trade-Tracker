@@ -577,15 +577,19 @@ async function importCSV(file) {
 
   try {
     const res = await fetch(`${API_BASE}/import`, { method: 'POST', body: formData });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Server error ${res.status}: ${text}`);
+    }
     const result = await res.json();
     const msg = `Imported ${result.imported} trade(s).` +
-      (result.errors.length ? ` ${result.errors.length} row(s) skipped.` : '');
+      (result.errors.length ? ` ${result.errors.length} row(s) skipped — see console.` : '');
     showToast(msg, result.errors.length ? 'info' : 'success', 6000);
-    if (result.errors.length) console.warn('Import errors:', result.errors);
+    if (result.errors.length) console.warn('Import row errors:', result.errors);
     await refreshAll();
   } catch (err) {
-    showToast(`Import failed: ${err.message}`, 'error');
+    showToast(`Import failed: ${err.message}`, 'error', 8000);
+    console.error('Import error:', err);
   } finally {
     dom.importBtn.disabled = false;
     dom.importBtn.textContent = '↑ Import CSV';
@@ -955,10 +959,17 @@ function bindEvents() {
     if (file) importCSV(file);
   });
 
-  // Template download
+  // Template download — generated client-side, no backend needed
   dom.templateBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    window.open(`${API_BASE}/template`, '_blank');
+    const headers = 'symbol,side,entry_price,exit_price,quantity,pnl,roe,leverage,risk_reward,entries,open_time,close_time,notes';
+    const example = 'BTC/USDT,long,60000,62000,0.1,200,3.33,10,2.0,1,2024-01-01T10:00:00,2024-01-01T12:00:00,Example trade';
+    const blob = new Blob([headers + '\n' + example], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'trades_template.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
   });
 
   // Live quantity unit + coin conversion
