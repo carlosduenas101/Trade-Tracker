@@ -179,6 +179,123 @@ function initBgCanvas() {
   window.addEventListener('resize', () => { resize(); buildRows(); });
 }
 
+/* ── Login screen animated line-chart ──────────────────────── */
+function initLoginCanvas() {
+  const canvas = document.getElementById('loginCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const SPACING = 18;    // px between price points
+  const SPEED1  = 0.55;  // main line scroll speed (px/frame)
+  const SPEED2  = 0.30;  // secondary line (slower "MA")
+
+  let buf1 = [], buf2 = [];
+  let off1 = 0,  off2 = 0;
+
+  function loginColors() {
+    const t = document.documentElement.getAttribute('data-theme');
+    if (t === 'blossom') return {
+      c1: '#9b5de5', fa1: 'rgba(155,93,229,0.22)', fb1: 'rgba(155,93,229,0)',
+      c2: '#ff85a1', fa2: 'rgba(255,133,161,0.10)', fb2: 'rgba(255,133,161,0)',
+    };
+    if (t === 'purple') return {
+      c1: '#7b2fff', fa1: 'rgba(123,47,255,0.25)', fb1: 'rgba(123,47,255,0)',
+      c2: '#e040fb', fa2: 'rgba(224,64,251,0.10)', fb2: 'rgba(224,64,251,0)',
+    };
+    return {
+      c1: '#39ff14', fa1: 'rgba(57,255,20,0.18)',  fb1: 'rgba(57,255,20,0)',
+      c2: '#00e5ff', fa2: 'rgba(0,229,255,0.09)',  fb2: 'rgba(0,229,255,0)',
+    };
+  }
+
+  function nextP(buf, mean, vol) {
+    const last = buf[buf.length - 1] ?? mean;
+    let p = last + (Math.random() - 0.5) * vol + (mean - last) * 0.06;
+    return Math.max(10, Math.min(90, p));
+  }
+
+  function initBuf(buf, mean, vol) {
+    buf.length = 0;
+    let p = mean;
+    const needed = Math.ceil(canvas.width / SPACING) + 8;
+    for (let i = 0; i < needed; i++) {
+      p += (Math.random() - 0.5) * vol + (mean - p) * 0.06;
+      p = Math.max(10, Math.min(90, p));
+      buf.push(p);
+    }
+  }
+
+  function resize() {
+    canvas.width  = canvas.offsetWidth  || window.innerWidth;
+    canvas.height = canvas.offsetHeight || 600;
+    initBuf(buf1, 58, 10);
+    initBuf(buf2, 44, 6);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Smooth bezier through points: draw filled area + stroke line
+  function drawSmoothLine(buf, subOff, lineColor, fillA, fillB, lineW) {
+    const W = canvas.width;
+    const H = canvas.height;
+    const py = p => H * 0.70 - (p / 100) * H * 0.48;
+    const pts = buf.map((p, i) => ({ x: i * SPACING - subOff, y: py(p) }));
+    if (pts.length < 2) return;
+
+    // Draw filled area below the curve
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2;
+      const my = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    ctx.lineTo(pts[pts.length - 1].x, H);
+    ctx.lineTo(pts[0].x, H);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, fillA);
+    grad.addColorStop(1, fillB);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Draw the line itself on top
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2;
+      const my = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth   = lineW;
+    ctx.lineJoin    = 'round';
+    ctx.stroke();
+  }
+
+  let rafId;
+  function frame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 0.55;
+
+    off1 += SPEED1;
+    off2 += SPEED2;
+    while (off1 >= SPACING) { off1 -= SPACING; buf1.push(nextP(buf1, 58, 10)); buf1.shift(); }
+    while (off2 >= SPACING) { off2 -= SPACING; buf2.push(nextP(buf2, 44,  6)); buf2.shift(); }
+
+    const c = loginColors();
+    drawSmoothLine(buf1, off1, c.c1, c.fa1, c.fb1, 1.8);
+    drawSmoothLine(buf2, off2, c.c2, c.fa2, c.fb2, 1.3);
+
+    ctx.globalAlpha = 1;
+    rafId = requestAnimationFrame(frame);
+  }
+
+  frame();
+}
+
 /* ── State ─────────────────────────────────────────────────── */
 const state = {
   trades: [],
@@ -1588,6 +1705,7 @@ async function init() {
   document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
   document.getElementById('loginThemeToggle')?.addEventListener('click', toggleTheme);
   initBgCanvas();
+  initLoginCanvas();
 
   // Always wire the login form first (it's in the DOM from page load)
   bindLoginEvents();
