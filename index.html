@@ -130,27 +130,62 @@
 
       <!-- Table Filters -->
       <div class="table-filters">
-        <div class="tf-group">
-          <span class="tf-label">Period</span>
-          <div class="tf-presets">
-            <button class="tf-preset-btn" data-days="7">7D</button>
-            <button class="tf-preset-btn" data-days="30">30D</button>
-            <button class="tf-preset-btn" data-days="90">90D</button>
-            <button class="tf-preset-btn tf-preset-active" data-days="0">Custom</button>
+
+        <!-- Date Range Dropdown -->
+        <div class="tf-dropdown" id="tfDateDropdown">
+          <button class="tf-dropdown-btn" id="tfDateBtn">
+            <span class="tf-btn-icon">📅</span>
+            <span id="tfDateLabel">Last 30 days</span>
+            <span class="tf-arrow">▾</span>
+          </button>
+          <div class="tf-panel" id="tfDatePanel" hidden>
+            <div class="tf-date-row">
+              <div class="tf-date-col">
+                <label class="tf-panel-label">From</label>
+                <input class="input-field" type="date" id="tfStartDate" />
+              </div>
+              <div class="tf-date-col">
+                <label class="tf-panel-label">To</label>
+                <input class="input-field" type="date" id="tfEndDate" />
+              </div>
+            </div>
+            <div class="tf-panel-divider"></div>
+            <div class="tf-quick-presets">
+              <button class="tf-quick-btn" data-days="7">Past 7 days</button>
+              <button class="tf-quick-btn" data-days="30">Past 30 days</button>
+              <button class="tf-quick-btn" data-days="90">Past 90 days</button>
+            </div>
+            <button class="btn btn-primary tf-apply-btn" id="tfApplyDate">Apply</button>
           </div>
         </div>
-        <div class="tf-group">
-          <span class="tf-label">Symbol</span>
-          <input class="input-field tf-input" type="text" id="filterSymbol" placeholder="BTC/USDT…" autocomplete="off" />
-        </div>
-        <div class="tf-group">
-          <span class="tf-label">Side</span>
-          <div class="tf-presets">
-            <button class="tf-side-btn tf-preset-active" data-side="">All</button>
-            <button class="tf-side-btn" data-side="long">Long</button>
-            <button class="tf-side-btn" data-side="short">Short</button>
+
+        <!-- Symbol Multi-select Dropdown -->
+        <div class="tf-dropdown" id="tfSymbolDropdown">
+          <button class="tf-dropdown-btn" id="tfSymbolBtn">
+            <span class="tf-btn-icon">🔍</span>
+            <span id="tfSymbolLabel">All Symbols</span>
+            <span class="tf-arrow">▾</span>
+          </button>
+          <div class="tf-panel" id="tfSymbolPanel" hidden>
+            <input class="input-field tf-search" type="text" id="tfSymbolSearch" placeholder="Search symbol…" autocomplete="off" />
+            <div class="tf-symbol-list" id="tfSymbolList"></div>
+            <div class="tf-panel-divider"></div>
+            <div class="tf-panel-row">
+              <button class="tf-text-btn" id="tfSymbolSelectAll">Select all</button>
+              <button class="tf-text-btn" id="tfSymbolClear">Clear</button>
+            </div>
           </div>
         </div>
+
+        <!-- Direction Select -->
+        <div class="tf-group">
+          <select class="input-field tf-select" id="filterSide">
+            <option value="">All Directions</option>
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+          </select>
+        </div>
+
       </div>
 
       <div class="table-container" role="region" aria-label="Trades table" tabindex="0">
