@@ -23,7 +23,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -170,7 +170,8 @@ def create_user(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+        db.rollback()
+        return JSONResponse(status_code=500, content={"error": f"{type(exc).__name__}: {exc}", "tb": traceback.format_exc()})
 
 
 @app.get("/auth/users", response_model=list[UserResponse], tags=["Auth"])
@@ -196,6 +197,35 @@ def toggle_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@app.get("/debug/bcrypt", include_in_schema=False)
+def debug_bcrypt():
+    import traceback
+    try:
+        h = hash_password("testpassword")
+        ok = verify_password("testpassword", h)
+        return JSONResponse({"ok": ok, "hash_len": len(h)})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc), "tb": traceback.format_exc()})
+
+
+@app.post("/debug/db-write", include_in_schema=False)
+def debug_db_write(db: Session = Depends(get_db)):
+    import time, traceback
+    try:
+        t = int(time.time())
+        u = User(username=f"dbtest{t}", email=f"dbtest{t}@x.com", hashed_password="x", is_admin=False)
+        db.add(u)
+        db.commit()
+        db.refresh(u)
+        uid = u.id
+        db.delete(u)
+        db.commit()
+        return JSONResponse({"ok": True, "inserted_id": uid})
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse({"ok": False, "error": str(exc), "tb": traceback.format_exc()})
 
 
 @app.post("/admin/claim-trades", tags=["Auth"])
