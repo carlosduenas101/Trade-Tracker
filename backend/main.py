@@ -308,7 +308,10 @@ async def import_trades(file: UploadFile = File(...), db: Session = Depends(get_
     except UnicodeDecodeError:
         text = content.decode("latin-1")
 
-    reader = csv.DictReader(io.StringIO(text))
+    # Auto-detect delimiter (tab or comma)
+    sample = text[:2048]
+    delimiter = '\t' if sample.count('\t') > sample.count(',') else ','
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     imported = 0
     errors = []
 
