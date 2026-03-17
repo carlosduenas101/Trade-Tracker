@@ -122,13 +122,17 @@
     <section class="table-section" aria-label="Trade history">
       <div class="section-header">
         <h2 class="section-title">Trade History</h2>
-        <span class="trade-count" id="tradeCount">0 trades</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button class="btn btn-danger" id="bulkDeleteBtn" hidden>&#128465; Delete Selected (<span id="selectedCount">0</span>)</button>
+          <span class="trade-count" id="tradeCount">0 trades</span>
+        </div>
       </div>
 
       <div class="table-container" role="region" aria-label="Trades table" tabindex="0">
         <table class="trades-table" id="tradesTable">
           <thead>
             <tr>
+              <th scope="col"><input type="checkbox" id="selectAll" title="Select all" /></th>
               <th scope="col">Date</th>
               <th scope="col">Symbol</th>
               <th scope="col">Side</th>

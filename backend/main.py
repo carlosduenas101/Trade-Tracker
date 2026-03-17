@@ -218,6 +218,23 @@ def delete_trade(trade_id: int, db: Session = Depends(get_db)) -> None:
 
 
 # ---------------------------------------------------------------------------
+# DELETE /trades/bulk
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel as _BaseModel
+
+class BulkDeleteRequest(_BaseModel):
+    ids: list[int]
+
+@app.delete("/trades/bulk", status_code=status.HTTP_200_OK, tags=["Trades"])
+def bulk_delete_trades(payload: BulkDeleteRequest, db: Session = Depends(get_db)):
+    """Delete multiple trades by ID list."""
+    deleted = db.query(Trade).filter(Trade.id.in_(payload.ids)).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": deleted}
+
+
+# ---------------------------------------------------------------------------
 # GET /trades/template  — download a blank CSV template
 # ---------------------------------------------------------------------------
 
