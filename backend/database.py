@@ -70,7 +70,6 @@ class User(Base):
     is_admin       = Column(Boolean, default=False, nullable=False)
     created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    trades = relationship("Trade", back_populates="owner", lazy="dynamic")
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +121,7 @@ class Trade(Base):
     entries = Column(Integer, nullable=True, default=1)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
-    owner = relationship("User", back_populates="trades")
+    owner = relationship("User")
 
 
 # ---------------------------------------------------------------------------
