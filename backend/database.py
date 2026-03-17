@@ -15,11 +15,14 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    ForeignKey,
     Integer,
     String,
     create_engine,
+    inspect,
+    text,
 )
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
 
 from config import DATABASE_URL
 
@@ -47,6 +50,32 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Base(DeclarativeBase):
     pass
+
+
+# ---------------------------------------------------------------------------
+# User model
+# ---------------------------------------------------------------------------
+
+
+class User(Base):
+    """Invite-only user. Created via POST /auth/users (requires ADMIN_SECRET)."""
+
+    __tablename__ = "users"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    username       = Column(String(50),  unique=True, nullable=False, index=True)
+    email          = Column(String(255), unique=True, nullable=False)
+    hashed_password= Column(String(255), nullable=False)
+    is_active      = Column(Boolean, default=True,  nullable=False)
+    is_admin       = Column(Boolean, default=False, nullable=False)
+    created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    trades = relationship("Trade", back_populates="owner", lazy="dynamic")
+
+
+# ---------------------------------------------------------------------------
+# Trade model
+# ---------------------------------------------------------------------------
 
 
 class Trade(Base):
@@ -91,10 +120,52 @@ class Trade(Base):
     notes = Column(String(1000), nullable=True)
     source = Column(String(10), nullable=False, default="manual")
     entries = Column(Integer, nullable=True, default=1)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    owner = relationship("User", back_populates="trades")
 
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# User Pydantic schemas
+# ---------------------------------------------------------------------------
+
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=2, max_length=50)
+    email: str    = Field(..., max_length=255)
+    password: str = Field(..., min_length=6)
+    is_admin: bool = False
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+# ---------------------------------------------------------------------------
+# Trade Pydantic schemas
 # ---------------------------------------------------------------------------
 
 
@@ -193,5 +264,22 @@ def compute_duration(open_time: datetime, close_time: datetime) -> int:
 
 
 def init_db() -> None:
-    """Create all tables if they do not already exist."""
+    """Create all tables if they do not already exist, then apply migrations."""
     Base.metadata.create_all(bind=engine)
+    _migrate()
+
+
+def _migrate() -> None:
+    """Add columns introduced after initial deploy (safe to run multiple times)."""
+    import logging
+    insp = inspect(engine)
+    tables = insp.get_table_names()
+
+    if "trades" in tables:
+        existing_cols = {c["name"] for c in insp.get_columns("trades")}
+        with engine.begin() as conn:
+            if "user_id" not in existing_cols:
+                logging.info("Migration: adding user_id column to trades")
+                conn.execute(text(
+                    "ALTER TABLE trades ADD COLUMN user_id INTEGER REFERENCES users(id)"
+                ))

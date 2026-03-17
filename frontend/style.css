@@ -1016,3 +1016,83 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   .app-header { padding: 0 16px; }
   .app-title  { font-size: 1rem; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   LOGIN SCREEN
+   ════════════════════════════════════════════════════════════ */
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: var(--bg-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-screen[hidden] { display: none; }
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: 40px 36px 32px;
+  box-shadow: var(--shadow-modal);
+  animation: slideUp 0.25s ease;
+}
+
+.login-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.login-subtitle {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 28px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-submit {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.login-invite {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 20px;
+}
+
+/* User info in header */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-name {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}

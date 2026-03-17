@@ -25,15 +25,28 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, st
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import config
+from auth import (
+    create_access_token,
+    get_current_user,
+    hash_password,
+    require_admin_secret,
+    verify_password,
+)
 from database import (
+    LoginRequest,
     SessionLocal,
+    TokenResponse,
     Trade,
     TradeCreate,
     TradeResponse,
     TradeUpdate,
+    User,
+    UserCreate,
+    UserResponse,
     compute_duration,
     compute_pnl,
     get_db,
@@ -89,6 +102,106 @@ def serve_index():
 
 
 # ---------------------------------------------------------------------------
+# Auth routes
+# ---------------------------------------------------------------------------
+
+
+@app.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    """Exchange username + password for a JWT access token."""
+    user = db.query(User).filter(User.username == payload.username).first()
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password.",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated.",
+        )
+    token = create_access_token(user.id, user.username)
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+@app.get("/auth/me", response_model=UserResponse, tags=["Auth"])
+def me(current_user: User = Depends(get_current_user)):
+    """Return the authenticated user's profile."""
+    return current_user
+
+
+@app.post("/auth/users", response_model=UserResponse, status_code=201, tags=["Auth"])
+def create_user(
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin_secret),
+):
+    """
+    Create an invited user.
+    Requires the X-Admin-Secret header to match the ADMIN_SECRET env var.
+    """
+    existing = db.query(User).filter(
+        (User.username == payload.username) | (User.email == payload.email)
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username or email already exists.",
+        )
+    user = User(
+        username=payload.username,
+        email=payload.email,
+        hashed_password=hash_password(payload.password),
+        is_admin=payload.is_admin,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.get("/auth/users", response_model=list[UserResponse], tags=["Auth"])
+def list_users(
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin_secret),
+):
+    """List all users (admin only)."""
+    return db.query(User).order_by(User.created_at.asc()).all()
+
+
+@app.patch("/auth/users/{user_id}", response_model=UserResponse, tags=["Auth"])
+def toggle_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin_secret),
+):
+    """Toggle a user's is_active flag (activate / deactivate)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    user.is_active = not user.is_active
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.post("/admin/claim-trades", tags=["Auth"])
+def claim_orphaned_trades(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Assign all trades that have no owner (legacy data) to the calling user.
+    Call this once after your first login to reclaim pre-auth trades.
+    """
+    updated = db.query(Trade).filter(Trade.user_id == None).update(
+        {"user_id": current_user.id}, synchronize_session=False
+    )
+    db.commit()
+    return {"claimed": updated}
+
+
+# ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
 
@@ -123,23 +236,15 @@ def _trade_from_create(data: TradeCreate) -> dict:
 
 @app.get("/trades", response_model=list[TradeResponse], tags=["Trades"])
 def list_trades(
-    start_date: Optional[datetime] = Query(
-        None,
-        description="Filter trades closed on or after this UTC datetime (ISO 8601).",
-        example="2024-01-01T00:00:00",
-    ),
-    end_date: Optional[datetime] = Query(
-        None,
-        description="Filter trades closed on or before this UTC datetime (ISO 8601).",
-        example="2024-12-31T23:59:59",
-    ),
+    start_date: Optional[datetime] = Query(None, example="2024-01-01T00:00:00"),
+    end_date:   Optional[datetime] = Query(None, example="2024-12-31T23:59:59"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[Trade]:
-    """
-    Return all trades, optionally filtered by close_time date range.
-    Results are sorted oldest-first so that metric calculations work correctly.
-    """
-    query = db.query(Trade).order_by(Trade.close_time.asc())
+    """Return the authenticated user's trades, oldest-first."""
+    query = db.query(Trade).filter(
+        or_(Trade.user_id == current_user.id, Trade.user_id == None)
+    ).order_by(Trade.close_time.asc())
     query = _apply_date_filters(query, start_date, end_date)
     return query.all()
 
@@ -150,19 +255,19 @@ def list_trades(
 
 
 @app.post("/trades", response_model=TradeResponse, status_code=status.HTTP_201_CREATED, tags=["Trades"])
-def create_trade(payload: TradeCreate, db: Session = Depends(get_db)) -> Trade:
-    """
-    Manually add a single completed trade.
-    PnL and duration are calculated automatically from the provided prices.
-    """
+def create_trade(
+    payload: TradeCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Trade:
+    """Manually add a single completed trade."""
     if payload.close_time <= payload.open_time:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="close_time must be after open_time.",
         )
-
     fields = _trade_from_create(payload)
-    trade = Trade(**fields)
+    trade = Trade(**fields, user_id=current_user.id)
     db.add(trade)
     db.commit()
     db.refresh(trade)
@@ -179,13 +284,13 @@ def update_trade(
     trade_id: int,
     payload: TradeUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Trade:
-    """
-    Edit an existing trade by ID.
-    Only fields present in the request body are updated.
-    PnL and duration are recalculated whenever price/time fields change.
-    """
-    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+    """Edit an existing trade by ID (must belong to the calling user)."""
+    trade = db.query(Trade).filter(
+        Trade.id == trade_id,
+        or_(Trade.user_id == current_user.id, Trade.user_id == None),
+    ).first()
     if not trade:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trade not found.")
 
@@ -208,9 +313,16 @@ def update_trade(
 
 
 @app.delete("/trades/{trade_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Trades"])
-def delete_trade(trade_id: int, db: Session = Depends(get_db)) -> None:
-    """Delete a trade by ID. Returns 204 No Content on success."""
-    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+def delete_trade(
+    trade_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Delete a trade by ID (must belong to the calling user)."""
+    trade = db.query(Trade).filter(
+        Trade.id == trade_id,
+        or_(Trade.user_id == current_user.id, Trade.user_id == None),
+    ).first()
     if not trade:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trade not found.")
     db.delete(trade)
@@ -227,9 +339,16 @@ class BulkDeleteRequest(_BaseModel):
     ids: list[int]
 
 @app.post("/trades/bulk-delete", status_code=status.HTTP_200_OK, tags=["Trades"])
-def bulk_delete_trades(payload: BulkDeleteRequest, db: Session = Depends(get_db)):
-    """Delete multiple trades by ID list."""
-    deleted = db.query(Trade).filter(Trade.id.in_(payload.ids)).delete(synchronize_session=False)
+def bulk_delete_trades(
+    payload: BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete multiple trades by ID list (only trades owned by the calling user)."""
+    deleted = db.query(Trade).filter(
+        Trade.id.in_(payload.ids),
+        or_(Trade.user_id == current_user.id, Trade.user_id == None),
+    ).delete(synchronize_session=False)
     db.commit()
     return {"deleted": deleted}
 
@@ -322,7 +441,11 @@ def _parse_dt(val: str):
 
 
 @app.post("/import", tags=["Trades"])
-async def import_trades(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_trades(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Bulk import trades from a CSV file.
     Download /trades/template for the expected column format.
@@ -392,6 +515,7 @@ async def import_trades(file: UploadFile = File(...), db: Session = Depends(get_
                 source="import",
                 is_win=pnl > 0,
                 duration_minutes=compute_duration(open_time, close_time),
+                user_id=current_user.id,
             )
             db.add(trade)
             imported += 1
@@ -409,31 +533,15 @@ async def import_trades(file: UploadFile = File(...), db: Session = Depends(get_
 
 @app.get("/metrics", tags=["Metrics"])
 def get_metrics(
-    start_date: Optional[datetime] = Query(
-        None,
-        description="Include only trades closed on or after this UTC datetime.",
-        example="2024-01-01T00:00:00",
-    ),
-    end_date: Optional[datetime] = Query(
-        None,
-        description="Include only trades closed on or before this UTC datetime.",
-        example="2024-12-31T23:59:59",
-    ),
+    start_date: Optional[datetime] = Query(None, example="2024-01-01T00:00:00"),
+    end_date:   Optional[datetime] = Query(None, example="2024-12-31T23:59:59"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    """
-    Return performance metrics computed across all (or filtered) trades.
-
-    Metrics returned
-    ----------------
-    win_rate        Percentage of winning trades (0–100).
-    total_pnl       Sum of all realised PnL.
-    max_drawdown    Largest peak-to-trough equity decline.
-    avg_rr          Average risk/reward ratio (trades with R:R set only).
-    current_streak  Positive = current win streak, negative = loss streak.
-    total_trades    Number of trades in the result set.
-    """
-    query = db.query(Trade).order_by(Trade.close_time.asc())
+    """Return performance metrics for the authenticated user's trades."""
+    query = db.query(Trade).filter(
+        or_(Trade.user_id == current_user.id, Trade.user_id == None)
+    ).order_by(Trade.close_time.asc())
     query = _apply_date_filters(query, start_date, end_date)
     trades = query.all()
     return get_all_metrics(trades)
