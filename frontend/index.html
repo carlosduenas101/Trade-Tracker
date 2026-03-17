@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Trade Tracker</title>
+  <title>IllusTrade</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -13,8 +13,8 @@
   <div class="login-screen" id="loginScreen">
     <div class="login-card">
       <div class="login-logo">
-        <span class="logo-mark">TT</span>
-        <h1 class="app-title">Trade Tracker</h1>
+        <span class="logo-mark">IT</span>
+        <h1 class="app-title">IllusTrade</h1>
       </div>
       <p class="login-subtitle">Sign in to continue</p>
       <form class="login-form" id="loginForm" novalidate>
@@ -38,14 +38,18 @@
   <!-- ═══════════════════════════════════════════════ HEADER -->
   <header class="app-header">
     <div class="header-left">
-      <span class="logo-mark">TT</span>
-      <h1 class="app-title">Trade Tracker</h1>
+      <span class="logo-mark">IT</span>
+      <h1 class="app-title">IllusTrade</h1>
     </div>
     <div class="header-right">
       <div class="connection-status" id="connectionStatus">
         <span class="status-dot"></span>
         <span class="status-label">Connecting…</span>
       </div>
+      <button class="theme-toggle" id="themeToggle" title="Switch theme">
+        <span class="theme-icon">🌙</span>
+        <span class="theme-label">Dark</span>
+      </button>
       <div class="user-info" id="userInfo" hidden>
         <span class="user-name" id="userNameDisplay"></span>
         <button class="btn btn-ghost btn-sm" id="logoutBtn">Sign Out</button>
