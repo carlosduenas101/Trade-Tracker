@@ -278,7 +278,7 @@ function initLoginCanvas() {
   let rafId;
   function frame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.80;
 
     off1 += SPEED1;
     off2 += SPEED2;

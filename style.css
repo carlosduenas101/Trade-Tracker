@@ -1245,9 +1245,9 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   z-index: 5;
   width: 100%;
   max-width: 420px;
-  background: rgba(10, 10, 10, 0.60);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  background: rgba(8, 8, 8, 0.30);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--border-default);
   border-top: 2px solid var(--accent-primary);
   border-radius: var(--radius-xl);
@@ -1257,11 +1257,11 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 }
 
 [data-theme="blossom"] .login-card {
-  background: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.26);
 }
 
 [data-theme="purple"] .login-card {
-  background: rgba(13, 13, 43, 0.74);
+  background: rgba(13, 13, 43, 0.35);
   border: 1px solid rgba(123, 47, 255, 0.30);
   border-top: 2px solid #7b2fff;
   box-shadow: var(--shadow-modal), 0 0 60px rgba(123, 47, 255, 0.20);
