@@ -553,6 +553,69 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 .action-btn--delete { color: var(--red); }
 .action-btn--delete:hover { background: var(--red-dim); border-color: var(--red-border); }
 
+/* ── TABLE FILTERS ──────────────────────────────────────────── */
+.table-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.tf-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tf-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+
+.tf-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.tf-preset-btn, .tf-side-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.tf-preset-btn:hover, .tf-side-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.tf-preset-active {
+  background: var(--green-dim);
+  border-color: var(--accent-primary) !important;
+  color: var(--accent-primary) !important;
+}
+
+.tf-input {
+  width: 130px;
+  padding: 4px 10px;
+  font-size: 12px;
+  height: auto;
+}
+
 /* Table error */
 .table-error {
   display: flex;

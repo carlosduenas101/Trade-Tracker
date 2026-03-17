@@ -16,6 +16,7 @@ const state = {
   editingId: null,
   pnlChart: null,
   selectedIds: new Set(),
+  tableFilter: { symbol: '', side: '' },
 };
 
 /* ════════════════════════════════════════════════════════════
@@ -97,6 +98,9 @@ const dom = {
   qtyConverted:      $('qtyConverted'),
   leverageNotionalGroup: $('leverageNotionalGroup'),
   leverageNotional:      $('leverageNotional'),
+
+  // Table filters
+  filterSymbol: $('filterSymbol'),
 
   // Bulk delete
   bulkDeleteBtn: $('bulkDeleteBtn'),
@@ -391,8 +395,19 @@ async function fetchTrades(startDate, endDate) {
  * Render trades array into the table body.
  * @param {Array} trades
  */
+function applyTableFilters(trades) {
+  const { symbol, side } = state.tableFilter;
+  return trades.filter(t => {
+    const symMatch = !symbol || (t.symbol || '').toLowerCase().includes(symbol.toLowerCase());
+    const sideMatch = !side || (t.side || '').toLowerCase() === side;
+    return symMatch && sideMatch;
+  });
+}
+
 function renderTradesTable(trades) {
-  dom.tradeCount.textContent = `${trades.length} trade${trades.length !== 1 ? 's' : ''}`;
+  const filtered = applyTableFilters(trades);
+  dom.tradeCount.textContent = `${filtered.length} trade${filtered.length !== 1 ? 's' : ''}${filtered.length !== trades.length ? ` (of ${trades.length})` : ''}`;
+  trades = filtered;
 
   if (!trades.length) {
     dom.tradesBody.innerHTML = `
@@ -1015,6 +1030,42 @@ function bindEvents() {
 
   // Add Trade button
   dom.addTradeBtn.addEventListener('click', openAddModal);
+
+  // ── Table filter: date presets ───────────────────────────────
+  document.querySelectorAll('.tf-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tf-preset-btn').forEach(b => b.classList.remove('tf-preset-active'));
+      btn.classList.add('tf-preset-active');
+      const days = parseInt(btn.dataset.days, 10);
+      if (days > 0) {
+        const today = new Date();
+        const from  = new Date();
+        from.setDate(from.getDate() - days);
+        dom.startDate.value = from.toISOString().slice(0, 10);
+        dom.endDate.value   = today.toISOString().slice(0, 10);
+        refreshAll();
+      }
+      // days===0 → Custom: leave existing dates, let user pick
+    });
+  });
+
+  // ── Table filter: symbol ─────────────────────────────────────
+  dom.filterSymbol.addEventListener('input', () => {
+    state.tableFilter.symbol = dom.filterSymbol.value.trim();
+    renderTradesTable(state.trades);
+    renderChart(applyTableFilters(state.trades));
+  });
+
+  // ── Table filter: side ───────────────────────────────────────
+  document.querySelectorAll('.tf-side-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tf-side-btn').forEach(b => b.classList.remove('tf-preset-active'));
+      btn.classList.add('tf-preset-active');
+      state.tableFilter.side = btn.dataset.side;
+      renderTradesTable(state.trades);
+      renderChart(applyTableFilters(state.trades));
+    });
+  });
 
   // CSV Import
   dom.importBtn.addEventListener('click', () => dom.csvFileInput.click());

@@ -128,6 +128,31 @@
         </div>
       </div>
 
+      <!-- Table Filters -->
+      <div class="table-filters">
+        <div class="tf-group">
+          <span class="tf-label">Period</span>
+          <div class="tf-presets">
+            <button class="tf-preset-btn" data-days="7">7D</button>
+            <button class="tf-preset-btn" data-days="30">30D</button>
+            <button class="tf-preset-btn" data-days="90">90D</button>
+            <button class="tf-preset-btn tf-preset-active" data-days="0">Custom</button>
+          </div>
+        </div>
+        <div class="tf-group">
+          <span class="tf-label">Symbol</span>
+          <input class="input-field tf-input" type="text" id="filterSymbol" placeholder="BTC/USDT…" autocomplete="off" />
+        </div>
+        <div class="tf-group">
+          <span class="tf-label">Side</span>
+          <div class="tf-presets">
+            <button class="tf-side-btn tf-preset-active" data-side="">All</button>
+            <button class="tf-side-btn" data-side="long">Long</button>
+            <button class="tf-side-btn" data-side="short">Short</button>
+          </div>
+        </div>
+      </div>
+
       <div class="table-container" role="region" aria-label="Trades table" tabindex="0">
         <table class="trades-table" id="tradesTable">
           <thead>
