@@ -140,31 +140,37 @@ def create_user(
     Create an invited user.
     Requires the X-Admin-Secret header to match the ADMIN_SECRET env var.
     """
-    existing = db.query(User).filter(
-        (User.username == payload.username) | (User.email == payload.email)
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username or email already exists.",
+    import traceback
+    try:
+        existing = db.query(User).filter(
+            (User.username == payload.username) | (User.email == payload.email)
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Username or email already exists.",
+            )
+        user = User(
+            username=payload.username,
+            email=payload.email,
+            hashed_password=hash_password(payload.password),
+            is_admin=payload.is_admin,
         )
-    user = User(
-        username=payload.username,
-        email=payload.email,
-        hashed_password=hash_password(payload.password),
-        is_admin=payload.is_admin,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return {
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "is_active": user.is_active,
-        "is_admin": user.is_admin,
-        "created_at": str(user.created_at),
-    }
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "is_active": user.is_active,
+            "is_admin": user.is_admin,
+            "created_at": str(user.created_at),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}")
 
 
 @app.get("/auth/users", response_model=list[UserResponse], tags=["Auth"])
