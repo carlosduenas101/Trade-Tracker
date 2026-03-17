@@ -695,6 +695,14 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 
 .tf-apply-btn { width: 100%; justify-content: center; }
 
+/* Date inputs inside the panel — full width, always show calendar icon */
+.tf-date-input {
+  width: 100%;
+  min-width: 0;
+  color-scheme: dark;
+  cursor: pointer;
+}
+
 /* Symbol list inside symbol panel */
 .tf-search { margin-bottom: 8px; }
 .tf-symbol-list {

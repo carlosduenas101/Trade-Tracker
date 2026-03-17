@@ -1204,11 +1204,16 @@ function bindEvents() {
     renderChart(applyTableFilters(state.trades));
   });
 
-  // Close dropdowns on outside click
-  document.addEventListener('click', (e) => {
+  // Close dropdowns on outside click.
+  // Use mousedown (fires before the browser opens the native date-picker calendar)
+  // so the panel stays open while the user interacts with the date picker.
+  document.addEventListener('mousedown', (e) => {
     if (!dom.tfDateDropdown?.contains(e.target))   closePanel(dom.tfDatePanel, dom.tfDateBtn);
     if (!dom.tfSymbolDropdown?.contains(e.target)) closePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
   });
+  // Prevent mousedown inside a panel from bubbling to the above handler
+  dom.tfDatePanel.addEventListener(  'mousedown', (e) => e.stopPropagation());
+  dom.tfSymbolPanel.addEventListener('mousedown', (e) => e.stopPropagation());
 
   // CSV Import
   dom.importBtn.addEventListener('click', () => dom.csvFileInput.click());
