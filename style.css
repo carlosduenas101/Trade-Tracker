@@ -52,6 +52,71 @@
   --shadow-focus:  0 0 0 3px rgba(57,255,20,.35);
 }
 
+/* ── BLOSSOM THEME ─────────────────────────────────────────── */
+[data-theme="blossom"] {
+  --bg-base:        #fdf6ff;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #f5eeff;
+  --bg-hover:       #ede0ff;
+  --bg-input:       #ffffff;
+
+  --border-subtle:  #ead6ff;
+  --border-default: #d0b0f5;
+  --border-focus:   #9b5de5;
+
+  --text-primary:   #1a0830;
+  --text-secondary: #7c3aed;
+  --text-muted:     #b09cc8;
+
+  --accent-primary: #9b5de5;
+  --accent-hover:   #7c3aed;
+
+  --green:          #9b5de5;
+  --green-dim:      rgba(155, 93, 229, 0.10);
+  --green-border:   rgba(155, 93, 229, 0.35);
+
+  --red:            #ff85a1;
+  --red-dim:        rgba(255, 133, 161, 0.14);
+  --red-border:     rgba(255, 133, 161, 0.40);
+
+  --yellow:         #f59e0b;
+  --yellow-dim:     rgba(245, 158, 11, 0.12);
+
+  --sync-color:     #9b5de5;
+  --sync-hover:     #7c3aed;
+
+  --shadow-card:    0 1px 0 var(--border-subtle), 0 4px 16px rgba(120, 60, 220, 0.07);
+  --shadow-modal:   0 8px 40px rgba(120, 60, 220, 0.14);
+  --shadow-focus:   0 0 0 3px rgba(155, 93, 229, 0.28);
+}
+
+/* Hardcoded colours that need overriding in blossom */
+[data-theme="blossom"] .logo-mark  { color: #fff; }
+[data-theme="blossom"] .btn-primary { color: #fff; }
+
+/* ── THEME TOGGLE BUTTON ────────────────────────────────────── */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 99px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+.theme-toggle:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+  color: var(--accent-primary);
+}
+.theme-icon { font-size: 0.9rem; line-height: 1; }
+
 /* ── RESET ─────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -93,6 +158,12 @@ body {
 }
 
 .header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-right {
   display: flex;
   align-items: center;
   gap: 12px;

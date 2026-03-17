@@ -24,6 +24,24 @@ function clearAuth() {
   localStorage.removeItem(_USER_KEY);
 }
 
+/* ── Theme ─────────────────────────────────────────────────── */
+const _THEME_KEY = 'tt_theme';
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem(_THEME_KEY, theme);
+  const btn = document.getElementById('themeToggle');
+  if (!btn) return;
+  const isBlossom = theme === 'blossom';
+  btn.querySelector('.theme-icon').textContent  = isBlossom ? '🌸' : '🌙';
+  btn.querySelector('.theme-label').textContent = isBlossom ? 'Blossom' : 'Dark';
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(current === 'dark' ? 'blossom' : 'dark');
+}
+
 /* ── State ─────────────────────────────────────────────────── */
 const state = {
   trades: [],
@@ -1428,6 +1446,10 @@ function setDefaultDateRange() {
 }
 
 async function init() {
+  // Apply saved theme before anything renders
+  applyTheme(localStorage.getItem(_THEME_KEY) || 'dark');
+  document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+
   // Always wire the login form first (it's in the DOM from page load)
   bindLoginEvents();
 
