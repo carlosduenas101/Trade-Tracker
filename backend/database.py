@@ -103,9 +103,9 @@ class TradeBase(BaseModel):
 
     symbol: str = Field(..., example="BTC/USDT")
     side: str = Field(..., example="long")
-    entry_price: float = Field(..., gt=0)
-    exit_price: float = Field(..., gt=0)
-    quantity: float = Field(..., gt=0)
+    entry_price: float = Field(..., ge=0)
+    exit_price: float = Field(..., ge=0)
+    quantity: float = Field(..., ge=0)
     pnl: float = Field(..., description="Realized PnL after fees, entered manually")
     roe: Optional[float] = Field(None, description="Return on Equity % entered manually")
     open_time: datetime
@@ -127,9 +127,9 @@ class TradeUpdate(BaseModel):
 
     symbol: Optional[str] = None
     side: Optional[str] = None
-    entry_price: Optional[float] = Field(None, gt=0)
-    exit_price: Optional[float] = Field(None, gt=0)
-    quantity: Optional[float] = Field(None, gt=0)
+    entry_price: Optional[float] = Field(None, ge=0)
+    exit_price: Optional[float] = Field(None, ge=0)
+    quantity: Optional[float] = Field(None, ge=0)
     open_time: Optional[datetime] = None
     close_time: Optional[datetime] = None
     pnl: Optional[float] = None
