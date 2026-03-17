@@ -268,8 +268,12 @@ def _normalise_row(row: dict) -> dict:
 
 
 def _parse_float(val: str):
+    if not val:
+        return None
     try:
-        return float(val) if val else None
+        # Remove thousands separators and currency symbols
+        cleaned = val.replace(',', '').replace('$', '').replace('%', '').strip()
+        return float(cleaned) if cleaned else None
     except ValueError:
         return None
 
@@ -337,9 +341,12 @@ async def import_trades(file: UploadFile = File(...), db: Session = Depends(get_
             open_time = _parse_dt(row.get("open_time", ""))
             close_time = _parse_dt(row.get("close_time", ""))
 
+            # entry/exit price optional — default to 0 if not in export
+            entry_price = entry_price or 0.0
+            exit_price  = exit_price  or 0.0
+
             missing = [f for f, v in [
                 ("symbol", symbol), ("side", side),
-                ("entry_price", entry_price), ("exit_price", exit_price),
                 ("quantity", quantity), ("pnl", pnl),
                 ("open_time", open_time), ("close_time", close_time),
             ] if not v and v != 0]
