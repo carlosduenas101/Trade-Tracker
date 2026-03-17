@@ -1201,6 +1201,16 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 
 .login-screen[hidden] { display: none; }
 
+/* ── Login chart canvas ────────────────────────────────────── */
+#loginCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* ── Toggle bar ────────────────────────────────────────────── */
 .login-topbar {
   position: absolute;
