@@ -64,7 +64,15 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     """Initialise database tables on first run."""
-    init_db()
+    import logging
+    db_type = "sqlite" if config.DATABASE_URL.startswith("sqlite") else "postgresql"
+    logging.info(f"Connecting to database type: {db_type}")
+    try:
+        init_db()
+        logging.info("Database initialised successfully.")
+    except Exception as exc:
+        logging.error(f"Database init failed: {exc}")
+        raise
 
 
 # ---------------------------------------------------------------------------

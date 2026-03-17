@@ -27,8 +27,15 @@ from config import DATABASE_URL
 # Engine & session factory
 # ---------------------------------------------------------------------------
 
-_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=_connect_args)
+# Supabase/Heroku use postgres:// — SQLAlchemy 2.0 requires postgresql://
+_db_url = DATABASE_URL.replace("postgres://", "postgresql://", 1) if DATABASE_URL.startswith("postgres://") else DATABASE_URL
+
+if _db_url.startswith("sqlite"):
+    _connect_args = {"check_same_thread": False}
+else:
+    _connect_args = {"sslmode": "require"}
+
+engine = create_engine(_db_url, connect_args=_connect_args)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
