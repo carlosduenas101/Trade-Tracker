@@ -9,6 +9,21 @@ const API_BASE = (typeof window.BACKEND_URL !== 'undefined' && window.BACKEND_UR
   ? window.BACKEND_URL.replace(/\/$/, '')
   : 'http://localhost:8000';
 
+/* ── Auth token helpers ────────────────────────────────────── */
+const _TOKEN_KEY = 'tt_token';
+const _USER_KEY  = 'tt_user';
+
+function getToken()      { return localStorage.getItem(_TOKEN_KEY); }
+function getStoredUser() { try { return JSON.parse(localStorage.getItem(_USER_KEY)); } catch { return null; } }
+function saveAuth(token, user) {
+  localStorage.setItem(_TOKEN_KEY, token);
+  localStorage.setItem(_USER_KEY, JSON.stringify(user));
+}
+function clearAuth() {
+  localStorage.removeItem(_TOKEN_KEY);
+  localStorage.removeItem(_USER_KEY);
+}
+
 /* ── State ─────────────────────────────────────────────────── */
 const state = {
   trades: [],
@@ -159,16 +174,22 @@ const dom = {
  */
 async function apiFetch(path, options = {}) {
   const url = `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  });
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(url, { headers, ...options });
+
+  if (res.status === 401) {
+    clearAuth();
+    showLoginScreen();
+    throw new Error('Session expired — please sign in again.');
+  }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { const j = await res.json(); msg = j.detail || j.message || msg; } catch (_) {}
     throw new Error(msg);
   }
-  // 204 No Content
   if (res.status === 204) return null;
   return res.json();
 }
@@ -677,7 +698,12 @@ async function importCSV(file) {
   dom.importBtn.textContent = 'Importing…';
 
   try {
-    const res = await fetch(`${API_BASE}/import`, { method: 'POST', body: formData });
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/import`, {
+      method: 'POST',
+      body: formData,
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Server error ${res.status}: ${text}`);
@@ -1035,6 +1061,72 @@ async function refreshAll() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   AUTH
+   ════════════════════════════════════════════════════════════ */
+
+function showLoginScreen() {
+  document.getElementById('loginScreen').hidden = false;
+  document.getElementById('userInfo').hidden = true;
+}
+
+function showApp(user) {
+  document.getElementById('loginScreen').hidden = true;
+  document.getElementById('userInfo').hidden = false;
+  document.getElementById('userNameDisplay').textContent = user.username;
+}
+
+async function doLogin(username, password) {
+  const loginBtn   = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  loginBtn.disabled = true;
+  loginBtn.textContent = 'Signing in…';
+  loginError.hidden = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.detail || 'Login failed.');
+    }
+    const data = await res.json();
+    saveAuth(data.access_token, data.user);
+    showApp(data.user);
+    setDefaultDateRange();
+    bindEvents();
+    setConnectionStatus('', 'Connecting…');
+    await refreshAll();
+  } catch (err) {
+    loginError.textContent = err.message;
+    loginError.hidden = false;
+  } finally {
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'Sign In';
+  }
+}
+
+function doLogout() {
+  clearAuth();
+  // Reset any state that was loaded for the previous user
+  state.trades = [];
+  state.selectedIds.clear();
+  state.tableFilter = { symbols: new Set(), side: '' };
+  showLoginScreen();
+}
+
+function bindLoginEvents() {
+  document.getElementById('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const u = document.getElementById('loginUsername').value.trim();
+    const p = document.getElementById('loginPassword').value;
+    if (u && p) doLogin(u, p);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
    FILTER HELPERS
    ════════════════════════════════════════════════════════════ */
 
@@ -1089,6 +1181,9 @@ function updateSymbolLabel() {
    EVENT LISTENERS
    ════════════════════════════════════════════════════════════ */
 function bindEvents() {
+  // Logout
+  document.getElementById('logoutBtn')?.addEventListener('click', doLogout);
+
   // Toolbar (legacy date inputs)
   dom.applyFilter.addEventListener('click', () => {
     // Sync toolbar dates to panel inputs so getDateRange() picks them up
@@ -1333,10 +1428,33 @@ function setDefaultDateRange() {
 }
 
 async function init() {
-  setDefaultDateRange();
-  bindEvents();
-  setConnectionStatus('', 'Connecting…');
-  await refreshAll();
+  // Always wire the login form first (it's in the DOM from page load)
+  bindLoginEvents();
+
+  const token = getToken();
+  const user  = getStoredUser();
+
+  if (token && user) {
+    // Verify the stored token is still accepted by the server
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('token invalid');
+      const currentUser = await res.json();
+      saveAuth(token, currentUser);   // refresh stored user data
+      showApp(currentUser);
+      setDefaultDateRange();
+      bindEvents();
+      setConnectionStatus('', 'Connecting…');
+      await refreshAll();
+      return;
+    } catch {
+      clearAuth();
+    }
+  }
+
+  showLoginScreen();
 }
 
 document.addEventListener('DOMContentLoaded', init);

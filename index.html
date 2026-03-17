@@ -9,6 +9,32 @@
 </head>
 <body>
 
+  <!-- ═══════════════════════════════════════════════ LOGIN SCREEN -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-logo">
+        <span class="logo-mark">TT</span>
+        <h1 class="app-title">Trade Tracker</h1>
+      </div>
+      <p class="login-subtitle">Sign in to continue</p>
+      <form class="login-form" id="loginForm" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="loginUsername">Username</label>
+          <input class="input-field" type="text" id="loginUsername"
+            autocomplete="username" placeholder="your username" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="loginPassword">Password</label>
+          <input class="input-field" type="password" id="loginPassword"
+            autocomplete="current-password" placeholder="••••••••" required />
+        </div>
+        <div class="form-error" id="loginError" hidden></div>
+        <button type="submit" class="btn btn-primary login-submit" id="loginBtn">Sign In</button>
+      </form>
+      <p class="login-invite">Access by invitation only.</p>
+    </div>
+  </div>
+
   <!-- ═══════════════════════════════════════════════ HEADER -->
   <header class="app-header">
     <div class="header-left">
@@ -19,6 +45,10 @@
       <div class="connection-status" id="connectionStatus">
         <span class="status-dot"></span>
         <span class="status-label">Connecting…</span>
+      </div>
+      <div class="user-info" id="userInfo" hidden>
+        <span class="user-name" id="userNameDisplay"></span>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn">Sign Out</button>
       </div>
     </div>
   </header>
