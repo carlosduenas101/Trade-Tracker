@@ -113,7 +113,7 @@ class TradeBase(BaseModel):
     risk_reward: Optional[float] = Field(None, ge=0)
     leverage: Optional[float] = Field(None, ge=1)
     notes: Optional[str] = Field(None, max_length=1000)
-    source: str = Field("manual", pattern="^(manual|api)$")
+    source: str = Field("manual", pattern="^(manual|api|import)$")
     entries: Optional[int] = Field(None, ge=1, description="Number of entries taken for this trade")
 
 
@@ -137,7 +137,7 @@ class TradeUpdate(BaseModel):
     risk_reward: Optional[float] = Field(None, ge=0)
     leverage: Optional[float] = Field(None, ge=1)
     notes: Optional[str] = Field(None, max_length=1000)
-    source: Optional[str] = Field(None, pattern="^(manual|api)$")
+    source: Optional[str] = Field(None, pattern="^(manual|api|import)$")
     entries: Optional[int] = Field(None, ge=1)
 
 

@@ -326,9 +326,8 @@ async def import_trades(file: UploadFile = File(...), db: Session = Depends(get_
             delimiter = _delim
             break
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
-    detected_columns = list(reader.fieldnames or [])
     imported = 0
-    errors = [f"DEBUG: delimiter={repr(delimiter)}, columns={detected_columns}"]
+    errors = []
 
     for i, raw_row in enumerate(reader, start=2):  # row 1 is header
         row = _normalise_row(raw_row)
