@@ -140,6 +140,21 @@ def create_user(
     Create an invited user.
     Requires the X-Admin-Secret header to match the ADMIN_SECRET env var.
     """
+    # --- DIAGNOSTIC PROBE ---
+    import sys, traceback as _tb
+    probe = {}
+    try:
+        import bcrypt as _bcrypt
+        probe["bcrypt_version"] = getattr(_bcrypt, "__version__", "?")
+        probe["hash_test"] = _bcrypt.hashpw(b"test", _bcrypt.gensalt()).decode()[:20]
+    except Exception as _e:
+        probe["bcrypt_error"] = f"{type(_e).__name__}: {_e}\n{_tb.format_exc()}"
+    try:
+        probe["db_ok"] = db.execute(__import__("sqlalchemy").text("SELECT 1")).scalar() == 1
+    except Exception as _e:
+        probe["db_error"] = str(_e)
+    return {"probe": probe, "payload": payload.model_dump(exclude={"password"})}
+    # --- END DIAGNOSTIC ---
     try:
         existing = db.query(User).filter(
             (User.username == payload.username) | (User.email == payload.email)
