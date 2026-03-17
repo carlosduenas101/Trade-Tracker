@@ -21,7 +21,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from dateutil import parser as dateparser
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -270,13 +269,23 @@ def _parse_int(val: str):
         return None
 
 
+_DT_FORMATS = [
+    "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M",    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d",          "%m/%d/%Y %H:%M:%S",
+    "%m/%d/%Y %H:%M",    "%m/%d/%Y",
+    "%d/%m/%Y %H:%M:%S", "%d/%m/%Y",
+]
+
 def _parse_dt(val: str):
     if not val:
         return None
-    try:
-        return dateparser.parse(val)
-    except Exception:
-        return None
+    for fmt in _DT_FORMATS:
+        try:
+            return datetime.strptime(val.strip(), fmt)
+        except ValueError:
+            continue
+    return None
 
 
 @app.post("/import", tags=["Trades"])
