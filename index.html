@@ -139,23 +139,24 @@
             <span class="tf-arrow">▾</span>
           </button>
           <div class="tf-panel" id="tfDatePanel" hidden>
-            <div class="tf-date-row">
-              <div class="tf-date-col">
-                <label class="tf-panel-label">From</label>
-                <input class="input-field" type="date" id="tfStartDate" />
-              </div>
-              <div class="tf-date-col">
-                <label class="tf-panel-label">To</label>
-                <input class="input-field" type="date" id="tfEndDate" />
-              </div>
-            </div>
-            <div class="tf-panel-divider"></div>
             <div class="tf-quick-presets">
               <button class="tf-quick-btn" data-days="7">Past 7 days</button>
               <button class="tf-quick-btn" data-days="30">Past 30 days</button>
               <button class="tf-quick-btn" data-days="90">Past 90 days</button>
             </div>
-            <button class="btn btn-primary tf-apply-btn" id="tfApplyDate">Apply</button>
+            <div class="tf-panel-divider"></div>
+            <div class="tf-panel-label" style="margin-bottom:8px;">Custom Range</div>
+            <div class="tf-date-row">
+              <div class="tf-date-col">
+                <label class="tf-panel-label">From</label>
+                <input class="input-field tf-date-input" type="date" id="tfStartDate" />
+              </div>
+              <div class="tf-date-col">
+                <label class="tf-panel-label">To</label>
+                <input class="input-field tf-date-input" type="date" id="tfEndDate" />
+              </div>
+            </div>
+            <button class="btn btn-primary tf-apply-btn" id="tfApplyDate" style="margin-top:10px;">Apply</button>
           </div>
         </div>
 
