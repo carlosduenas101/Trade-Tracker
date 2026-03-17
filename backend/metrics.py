@@ -80,6 +80,22 @@ def calculate_max_drawdown(trades: list[TradeItem]) -> float:
     return round(max_dd, 8)
 
 
+def calculate_avg_duration(trades: list[TradeItem]) -> float:
+    """
+    Calculate the average trade duration in minutes.
+
+    Returns 0.0 when no trades have a duration value.
+    """
+    values = [
+        _get(t, "duration_minutes")
+        for t in trades
+        if _get(t, "duration_minutes") is not None and _get(t, "duration_minutes") > 0
+    ]
+    if not values:
+        return 0.0
+    return round(sum(values) / len(values), 2)
+
+
 def calculate_avg_entries(trades: list[TradeItem]) -> float:
     """
     Calculate the average number of entries per trade.
@@ -189,6 +205,7 @@ def get_all_metrics(trades: list[TradeItem]) -> dict:
         "avg_rr": calculate_avg_rr(trades),
         "avg_roe": calculate_avg_roe(trades),
         "avg_entries": calculate_avg_entries(trades),
+        "avg_duration": calculate_avg_duration(trades),
         "current_streak": streak,
         "streak_type": "win" if streak > 0 else "loss" if streak < 0 else "",
         "total_trades": len(trades),

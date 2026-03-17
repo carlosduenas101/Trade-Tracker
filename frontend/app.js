@@ -47,6 +47,8 @@ const dom = {
   metricAvgRoeSub:      $('metricAvgRoeSub'),
   metricAvgEntries:     $('metricAvgEntries'),
   metricAvgEntriesSub:  $('metricAvgEntriesSub'),
+  metricAvgDuration:    $('metricAvgDuration'),
+  metricAvgDurationSub: $('metricAvgDurationSub'),
 
   cardWinRate:    $('card-winRate'),
   cardPnl:        $('card-pnl'),
@@ -55,7 +57,8 @@ const dom = {
   cardStreak:     $('card-streak'),
   cardTotal:      $('card-total'),
   cardAvgRoe:     $('card-avgRoe'),
-  cardAvgEntries: $('card-avgEntries'),
+  cardAvgEntries:  $('card-avgEntries'),
+  cardAvgDuration: $('card-avgDuration'),
 
   // Table
   tradesBody:   $('tradesBody'),
@@ -248,7 +251,7 @@ function showToast(msg, type = 'info', duration = 3500) {
  */
 async function fetchMetrics(startDate, endDate) {
   // Skeleton loading
-  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries];
+  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration];
   cards.forEach(el => { el.textContent = '···'; el.classList.add('skeleton'); });
 
   try {
@@ -331,6 +334,12 @@ function renderMetrics(data) {
   dom.metricAvgEntries.textContent = avg_entries != null && avg_entries > 0 ? Number(avg_entries).toFixed(1) : '—';
   dom.metricAvgEntries.classList.remove('skeleton');
   dom.metricAvgEntriesSub.textContent = 'Entries per trade';
+
+  // Avg Duration
+  const avg_duration = data.avg_duration;
+  dom.metricAvgDuration.textContent = avg_duration != null && avg_duration > 0 ? formatDuration(avg_duration) : '—';
+  dom.metricAvgDuration.classList.remove('skeleton');
+  dom.metricAvgDurationSub.textContent = 'Per trade average';
 }
 
 function applyCardColor(cardEl, type) {
