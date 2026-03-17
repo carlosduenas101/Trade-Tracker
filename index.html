@@ -37,6 +37,9 @@
         <button class="btn btn-ghost" id="clearFilter">Clear</button>
       </div>
       <div class="action-group">
+        <button class="btn btn-secondary" id="importBtn">&#8593; Import CSV</button>
+        <a class="btn btn-ghost" id="templateBtn" href="#" download>&#8595; Template</a>
+        <input type="file" id="csvFileInput" accept=".csv" style="display:none" />
         <button class="btn btn-primary" id="addTradeBtn">+ Add Trade</button>
       </div>
     </section>
@@ -84,6 +87,12 @@
         <div class="metric-label">Avg ROE %</div>
         <div class="metric-value" id="metricAvgRoe">—</div>
         <div class="metric-sub" id="metricAvgRoeSub">&nbsp;</div>
+      </article>
+
+      <article class="metric-card" id="card-avgEntries">
+        <div class="metric-label">Avg Entries</div>
+        <div class="metric-value" id="metricAvgEntries">—</div>
+        <div class="metric-sub" id="metricAvgEntriesSub">&nbsp;</div>
       </article>
 
     </section>
@@ -224,10 +233,16 @@
             <input class="input-field" type="number" id="fRR" name="rr"
               placeholder="e.g. 2.5" min="0" step="any" />
           </div>
-          <div class="form-group leverage-display" id="leverageNotionalGroup" style="display:none;">
-            <label class="form-label">Real Capital</label>
-            <div class="input-field leverage-calc" id="leverageNotional">—</div>
+          <div class="form-group">
+            <label class="form-label" for="fEntries">Entries <span class="optional">(optional)</span></label>
+            <input class="input-field" type="number" id="fEntries" name="entries"
+              placeholder="e.g. 3" min="1" step="1" />
           </div>
+        </div>
+
+        <div class="leverage-display" id="leverageNotionalGroup" style="display:none;padding:0 0 8px 0;">
+          <span class="form-label">Real Capital: </span>
+          <span class="input-field leverage-calc" id="leverageNotional" style="display:inline;padding:2px 8px;">—</span>
         </div>
 
         <div class="form-row">
