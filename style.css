@@ -91,7 +91,6 @@
 }
 
 /* Hardcoded colours that need overriding in blossom */
-[data-theme="blossom"] .logo-mark  { color: #fff; }
 [data-theme="blossom"] .btn-primary { color: #fff; }
 [data-theme="blossom"] input[type="date"].input-field,
 [data-theme="blossom"] input[type="datetime-local"].input-field { color-scheme: light; }
@@ -171,20 +170,19 @@ body {
   gap: 12px;
 }
 
-.logo-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* ── Logo icon (inline SVG replacing the old IT box) ────────── */
+.logo-icon {
   width: 32px;
   height: 32px;
-  background: var(--accent-primary);
-  color: #000;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: var(--radius-md);
-  letter-spacing: -0.5px;
   flex-shrink: 0;
+  overflow: visible;
+}
+.logo-icon .lbar   { fill:   var(--text-primary); }
+.logo-icon .larrow { stroke: var(--accent-primary); }
+
+.login-logo-icon {
+  width: 44px;
+  height: 44px;
 }
 
 .app-title {
@@ -1174,12 +1172,6 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   margin-bottom: 8px;
 }
 
-.login-logo-mark {
-  width: 48px;
-  height: 48px;
-  font-size: 16px;
-  border-radius: var(--radius-lg);
-}
 
 .login-subtitle {
   text-align: center;

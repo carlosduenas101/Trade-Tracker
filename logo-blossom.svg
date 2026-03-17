@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 44" role="img" aria-label="IllusTrade">
+  <title>IllusTrade</title>
+
+  <!-- ── Ascending bar chart icon ── -->
+  <g transform="translate(0,6)">
+    <!-- Bar 1 — short -->
+    <rect x="0"  y="18" width="8" height="14" rx="1.5" fill="#1a0830"/>
+    <!-- Bar 2 — medium -->
+    <rect x="11" y="10" width="8" height="22" rx="1.5" fill="#1a0830"/>
+    <!-- Bar 3 — tall -->
+    <rect x="22" y="2"  width="8" height="30" rx="1.5" fill="#1a0830"/>
+
+    <!-- Trend arrow — baby pink accent -->
+    <path d="M 4 16 L 26 0 M 18 0 L 26 0 L 26 8"
+      stroke="#ff85a1" stroke-width="2.2"
+      stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- ── Wordmark ── -->
+  <text
+    x="38" y="31"
+    font-family="system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="21" font-weight="700" letter-spacing="0.5"
+    fill="#1a0830">IllusTrade</text>
+</svg>
