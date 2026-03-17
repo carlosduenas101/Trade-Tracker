@@ -8,10 +8,10 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 
+import bcrypt
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from database import User, get_db
@@ -28,18 +28,16 @@ ACCESS_TOKEN_EXPIRE_DAYS = 7
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
 
 # ---------------------------------------------------------------------------
-# Password hashing
+# Password hashing (direct bcrypt — avoids passlib 1.7/bcrypt 4.x conflict)
 # ---------------------------------------------------------------------------
-
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(plain: str) -> str:
-    return _pwd.hash(plain)
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
 # ---------------------------------------------------------------------------
