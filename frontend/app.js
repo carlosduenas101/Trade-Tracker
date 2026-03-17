@@ -16,7 +16,7 @@ const state = {
   editingId: null,
   pnlChart: null,
   selectedIds: new Set(),
-  tableFilter: { symbol: '', side: '' },
+  tableFilter: { symbols: new Set(), side: '' },
 };
 
 /* ════════════════════════════════════════════════════════════
@@ -99,8 +99,29 @@ const dom = {
   leverageNotionalGroup: $('leverageNotionalGroup'),
   leverageNotional:      $('leverageNotional'),
 
-  // Table filters
-  filterSymbol: $('filterSymbol'),
+  // Table filter — dropdown wrappers
+  tfDateDropdown:   $('tfDateDropdown'),
+  tfSymbolDropdown: $('tfSymbolDropdown'),
+
+  // Table filter — date dropdown
+  tfDateBtn:    $('tfDateBtn'),
+  tfDatePanel:  $('tfDatePanel'),
+  tfDateLabel:  $('tfDateLabel'),
+  tfStartDate:  $('tfStartDate'),
+  tfEndDate:    $('tfEndDate'),
+  tfApplyDate:  $('tfApplyDate'),
+
+  // Table filter — symbol dropdown
+  tfSymbolBtn:       $('tfSymbolBtn'),
+  tfSymbolPanel:     $('tfSymbolPanel'),
+  tfSymbolLabel:     $('tfSymbolLabel'),
+  tfSymbolSearch:    $('tfSymbolSearch'),
+  tfSymbolList:      $('tfSymbolList'),
+  tfSymbolSelectAll: $('tfSymbolSelectAll'),
+  tfSymbolClear:     $('tfSymbolClear'),
+
+  // Table filter — direction
+  filterSide: $('filterSide'),
 
   // Bulk delete
   bulkDeleteBtn: $('bulkDeleteBtn'),
@@ -208,11 +229,11 @@ function buildQuery(params) {
   return q ? `?${q}` : '';
 }
 
-/** Get current date filter values. */
+/** Get current date filter values (table filter panel takes precedence). */
 function getDateRange() {
   return {
-    start_date: dom.startDate.value || null,
-    end_date:   dom.endDate.value   || null,
+    start_date: dom.tfStartDate.value || dom.startDate.value || null,
+    end_date:   dom.tfEndDate.value   || dom.endDate.value   || null,
   };
 }
 
@@ -379,6 +400,7 @@ async function fetchTrades(startDate, endDate) {
     const qs = buildQuery({ start_date: startDate, end_date: endDate });
     const trades = await apiFetch(`/trades${qs}`);
     state.trades = Array.isArray(trades) ? trades : (trades.items ?? trades.data ?? []);
+    populateSymbolList(state.trades);
     renderTradesTable(state.trades);
     renderChart(state.trades);
   } catch (err) {
@@ -396,9 +418,9 @@ async function fetchTrades(startDate, endDate) {
  * @param {Array} trades
  */
 function applyTableFilters(trades) {
-  const { symbol, side } = state.tableFilter;
+  const { symbols, side } = state.tableFilter;
   return trades.filter(t => {
-    const symMatch = !symbol || (t.symbol || '').toLowerCase().includes(symbol.toLowerCase());
+    const symMatch = symbols.size === 0 || symbols.has((t.symbol || '').toUpperCase());
     const sideMatch = !side || (t.side || '').toLowerCase() === side;
     return symMatch && sideMatch;
   });
@@ -1013,58 +1035,179 @@ async function refreshAll() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   FILTER HELPERS
+   ════════════════════════════════════════════════════════════ */
+
+function togglePanel(panelEl, btnEl) {
+  panelEl.hidden = !panelEl.hidden;
+  btnEl.classList.toggle('is-open', !panelEl.hidden);
+}
+
+function closePanel(panelEl, btnEl) {
+  if (!panelEl) return;
+  panelEl.hidden = true;
+  btnEl?.classList.remove('is-open');
+}
+
+function clearActivePreset() {
+  document.querySelectorAll('.tf-quick-btn').forEach(b => b.classList.remove('is-active'));
+}
+
+function populateSymbolList(trades) {
+  const unique = [...new Set(
+    trades.map(t => (t.symbol || '').toUpperCase()).filter(Boolean)
+  )].sort();
+
+  dom.tfSymbolList.innerHTML = unique.map(sym => `
+    <label class="tf-symbol-item" data-sym="${escHtml(sym)}">
+      <input type="checkbox" data-sym="${escHtml(sym)}" />
+      ${escHtml(sym)}
+    </label>
+  `).join('');
+
+  // Re-check any previously selected symbols
+  if (state.tableFilter.symbols.size > 0) {
+    dom.tfSymbolList.querySelectorAll('input[data-sym]').forEach(cb => {
+      cb.checked = state.tableFilter.symbols.has(cb.dataset.sym);
+    });
+  }
+  updateSymbolLabel();
+}
+
+function updateSymbolLabel() {
+  const { symbols } = state.tableFilter;
+  if (symbols.size === 0) {
+    dom.tfSymbolLabel.textContent = 'All Symbols';
+  } else if (symbols.size === 1) {
+    dom.tfSymbolLabel.textContent = [...symbols][0];
+  } else {
+    dom.tfSymbolLabel.textContent = `${symbols.size} Symbols`;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
    EVENT LISTENERS
    ════════════════════════════════════════════════════════════ */
 function bindEvents() {
-  // Toolbar
-  dom.applyFilter.addEventListener('click', refreshAll);
+  // Toolbar (legacy date inputs)
+  dom.applyFilter.addEventListener('click', () => {
+    // Sync toolbar dates to panel inputs so getDateRange() picks them up
+    dom.tfStartDate.value = dom.startDate.value;
+    dom.tfEndDate.value   = dom.endDate.value;
+    dom.tfDateLabel.textContent = dom.startDate.value && dom.endDate.value
+      ? `${dom.startDate.value} → ${dom.endDate.value}` : 'All time';
+    refreshAll();
+  });
   dom.clearFilter.addEventListener('click', () => {
     dom.startDate.value = '';
     dom.endDate.value   = '';
+    dom.tfStartDate.value = '';
+    dom.tfEndDate.value   = '';
+    dom.tfDateLabel.textContent = 'All time';
+    clearActivePreset();
     refreshAll();
   });
-
-  // Also trigger on Enter in date inputs
   dom.startDate.addEventListener('keydown', (e) => e.key === 'Enter' && refreshAll());
   dom.endDate.addEventListener(  'keydown', (e) => e.key === 'Enter' && refreshAll());
 
   // Add Trade button
   dom.addTradeBtn.addEventListener('click', openAddModal);
 
-  // ── Table filter: date presets ───────────────────────────────
-  document.querySelectorAll('.tf-preset-btn').forEach(btn => {
+  // ── Table filter: date dropdown ──────────────────────────────
+  dom.tfDateBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePanel(dom.tfDatePanel, dom.tfDateBtn);
+    if (!dom.tfDatePanel.hidden) closePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
+  });
+
+  dom.tfApplyDate.addEventListener('click', () => {
+    const start = dom.tfStartDate.value;
+    const end   = dom.tfEndDate.value;
+    dom.startDate.value = start;
+    dom.endDate.value   = end;
+    dom.tfDateLabel.textContent = start && end
+      ? `${start} → ${end}` : start ? `From ${start}` : end ? `Until ${end}` : 'All time';
+    clearActivePreset();
+    closePanel(dom.tfDatePanel, dom.tfDateBtn);
+    refreshAll();
+  });
+
+  document.querySelectorAll('.tf-quick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tf-preset-btn').forEach(b => b.classList.remove('tf-preset-active'));
-      btn.classList.add('tf-preset-active');
+      document.querySelectorAll('.tf-quick-btn').forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
       const days = parseInt(btn.dataset.days, 10);
-      if (days > 0) {
-        const today = new Date();
-        const from  = new Date();
-        from.setDate(from.getDate() - days);
-        dom.startDate.value = from.toISOString().slice(0, 10);
-        dom.endDate.value   = today.toISOString().slice(0, 10);
-        refreshAll();
-      }
-      // days===0 → Custom: leave existing dates, let user pick
+      const today = new Date();
+      const from  = new Date();
+      from.setDate(from.getDate() - days);
+      const todayStr = today.toISOString().slice(0, 10);
+      const fromStr  = from.toISOString().slice(0, 10);
+      dom.startDate.value   = fromStr;
+      dom.endDate.value     = todayStr;
+      dom.tfStartDate.value = fromStr;
+      dom.tfEndDate.value   = todayStr;
+      dom.tfDateLabel.textContent = btn.textContent.trim();
+      closePanel(dom.tfDatePanel, dom.tfDateBtn);
+      refreshAll();
     });
   });
 
-  // ── Table filter: symbol ─────────────────────────────────────
-  dom.filterSymbol.addEventListener('input', () => {
-    state.tableFilter.symbol = dom.filterSymbol.value.trim();
+  // ── Table filter: symbol dropdown ────────────────────────────
+  dom.tfSymbolBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
+    if (!dom.tfSymbolPanel.hidden) {
+      closePanel(dom.tfDatePanel, dom.tfDateBtn);
+      dom.tfSymbolSearch.focus();
+    }
+  });
+
+  dom.tfSymbolSearch.addEventListener('input', () => {
+    const q = dom.tfSymbolSearch.value.trim().toLowerCase();
+    dom.tfSymbolList.querySelectorAll('.tf-symbol-item').forEach(item => {
+      const sym = item.dataset.sym || '';
+      item.style.display = sym.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+
+  dom.tfSymbolList.addEventListener('change', (e) => {
+    const cb = e.target.closest('input[data-sym]');
+    if (!cb) return;
+    const sym = cb.dataset.sym;
+    if (cb.checked) state.tableFilter.symbols.add(sym);
+    else state.tableFilter.symbols.delete(sym);
+    updateSymbolLabel();
     renderTradesTable(state.trades);
     renderChart(applyTableFilters(state.trades));
   });
 
-  // ── Table filter: side ───────────────────────────────────────
-  document.querySelectorAll('.tf-side-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tf-side-btn').forEach(b => b.classList.remove('tf-preset-active'));
-      btn.classList.add('tf-preset-active');
-      state.tableFilter.side = btn.dataset.side;
-      renderTradesTable(state.trades);
-      renderChart(applyTableFilters(state.trades));
-    });
+  dom.tfSymbolSelectAll.addEventListener('click', () => {
+    state.tableFilter.symbols.clear();
+    dom.tfSymbolList.querySelectorAll('input[data-sym]').forEach(cb => { cb.checked = false; });
+    updateSymbolLabel();
+    renderTradesTable(state.trades);
+    renderChart(applyTableFilters(state.trades));
+  });
+
+  dom.tfSymbolClear.addEventListener('click', () => {
+    state.tableFilter.symbols.clear();
+    dom.tfSymbolList.querySelectorAll('input[data-sym]').forEach(cb => { cb.checked = false; });
+    updateSymbolLabel();
+    renderTradesTable(state.trades);
+    renderChart(applyTableFilters(state.trades));
+  });
+
+  // ── Table filter: direction ──────────────────────────────────
+  dom.filterSide.addEventListener('change', () => {
+    state.tableFilter.side = dom.filterSide.value;
+    renderTradesTable(state.trades);
+    renderChart(applyTableFilters(state.trades));
+  });
+
+  // Close dropdowns on outside click
+  document.addEventListener('click', (e) => {
+    if (!dom.tfDateDropdown?.contains(e.target))   closePanel(dom.tfDatePanel, dom.tfDateBtn);
+    if (!dom.tfSymbolDropdown?.contains(e.target)) closePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
   });
 
   // CSV Import
@@ -1174,9 +1317,14 @@ function setDefaultDateRange() {
   const today = new Date();
   const prior = new Date();
   prior.setDate(prior.getDate() - 30);
+  const todayStr = today.toISOString().slice(0, 10);
+  const priorStr = prior.toISOString().slice(0, 10);
 
-  dom.endDate.value   = today.toISOString().slice(0, 10);
-  dom.startDate.value = prior.toISOString().slice(0, 10);
+  dom.endDate.value     = todayStr;
+  dom.startDate.value   = priorStr;
+  dom.tfEndDate.value   = todayStr;
+  dom.tfStartDate.value = priorStr;
+  if (dom.tfDateLabel) dom.tfDateLabel.textContent = 'Last 30 days';
 }
 
 async function init() {
