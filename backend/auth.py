@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -80,14 +80,15 @@ def get_current_user(
     return user
 
 
-def require_admin_secret(x_admin_secret: str = Header(...)) -> None:
+def require_admin_secret(request: Request) -> None:
     """Dependency — gate for user-management endpoints."""
     if not ADMIN_SECRET:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="ADMIN_SECRET environment variable is not set on the server.",
         )
-    if x_admin_secret != ADMIN_SECRET:
+    secret = request.headers.get("x-admin-secret", "")
+    if secret != ADMIN_SECRET:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid admin secret.",
