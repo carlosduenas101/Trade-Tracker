@@ -15,6 +15,7 @@ const state = {
   pendingDeleteId: null,
   editingId: null,
   pnlChart: null,
+  selectedIds: new Set(),
 };
 
 /* ════════════════════════════════════════════════════════════
@@ -96,6 +97,11 @@ const dom = {
   qtyConverted:      $('qtyConverted'),
   leverageNotionalGroup: $('leverageNotionalGroup'),
   leverageNotional:      $('leverageNotional'),
+
+  // Bulk delete
+  bulkDeleteBtn: $('bulkDeleteBtn'),
+  selectedCount: $('selectedCount'),
+  selectAll:     $('selectAll'),
 
   // Delete Confirm Modal
   confirmBackdrop:  $('confirmBackdrop'),
@@ -396,6 +402,9 @@ function renderTradesTable(trades) {
     return;
   }
 
+  state.selectedIds.clear();
+  updateSelectionUI();
+
   const rows = trades.map((trade) => {
     const pnl     = parseFloat(trade.pnl ?? trade.profit_loss ?? 0);
     const pnlSign = pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : '';
@@ -409,6 +418,7 @@ function renderTradesTable(trades) {
     const rr = trade.rr ?? trade.risk_reward ?? trade.r_r;
 
     return `<tr data-id="${escHtml(trade.id ?? '')}">
+      <td><input type="checkbox" data-select="${escHtml(trade.id ?? '')}" /></td>
       <td class="td-mono">${formatDate(trade.close_time ?? trade.open_time)}</td>
       <td class="td-symbol">${escHtml(trade.symbol ?? '—')}</td>
       <td class="${sideClass}">${escHtml(side.charAt(0).toUpperCase() + side.slice(1) || '—')}</td>
@@ -543,6 +553,51 @@ async function updateTrade(id, tradeData) {
   } finally {
     dom.submitBtn.disabled = false;
     dom.submitBtn.textContent = 'Save Changes';
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   SELECTION HELPERS
+   ════════════════════════════════════════════════════════════ */
+
+function updateSelectionUI() {
+  const count = state.selectedIds.size;
+  dom.selectedCount.textContent = count;
+  dom.bulkDeleteBtn.hidden = count === 0;
+  // Sync select-all checkbox state
+  const total = dom.tradesBody.querySelectorAll('input[type="checkbox"]').length;
+  dom.selectAll.indeterminate = count > 0 && count < total;
+  dom.selectAll.checked = total > 0 && count === total;
+}
+
+function clearSelection() {
+  state.selectedIds.clear();
+  dom.tradesBody.querySelectorAll('input[data-select]').forEach(cb => cb.checked = false);
+  updateSelectionUI();
+}
+
+/* ════════════════════════════════════════════════════════════
+   BULK DELETE
+   ════════════════════════════════════════════════════════════ */
+
+async function bulkDeleteTrades() {
+  const ids = [...state.selectedIds];
+  if (!ids.length) return;
+  if (!confirm(`Delete ${ids.length} trade(s)? This cannot be undone.`)) return;
+
+  dom.bulkDeleteBtn.disabled = true;
+  try {
+    await apiFetch('/trades/bulk', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids }),
+    });
+    showToast(`${ids.length} trade(s) deleted.`, 'success');
+    state.selectedIds.clear();
+    await refreshAll();
+  } catch (err) {
+    showToast(`Bulk delete failed: ${err.message}`, 'error');
+  } finally {
+    dom.bulkDeleteBtn.disabled = false;
   }
 }
 
@@ -1024,6 +1079,31 @@ function bindEvents() {
 
   // Table delegation
   dom.tradesBody.addEventListener('click', handleTableClick);
+
+  // Row checkboxes
+  dom.tradesBody.addEventListener('change', (e) => {
+    const cb = e.target.closest('input[data-select]');
+    if (!cb) return;
+    const id = Number(cb.dataset.select);
+    if (cb.checked) state.selectedIds.add(id);
+    else state.selectedIds.delete(id);
+    updateSelectionUI();
+  });
+
+  // Select all
+  dom.selectAll.addEventListener('change', () => {
+    const checkboxes = dom.tradesBody.querySelectorAll('input[data-select]');
+    checkboxes.forEach(cb => {
+      const id = Number(cb.dataset.select);
+      cb.checked = dom.selectAll.checked;
+      if (dom.selectAll.checked) state.selectedIds.add(id);
+      else state.selectedIds.delete(id);
+    });
+    updateSelectionUI();
+  });
+
+  // Bulk delete
+  dom.bulkDeleteBtn.addEventListener('click', bulkDeleteTrades);
 
   // Retry button
   dom.retryBtn.addEventListener('click', refreshAll);
