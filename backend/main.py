@@ -130,7 +130,7 @@ def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@app.post("/auth/users", response_model=UserResponse, status_code=201, tags=["Auth"])
+@app.post("/auth/users", status_code=201, tags=["Auth"])
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
@@ -163,7 +163,15 @@ def create_user(
     except Exception as exc:
         import traceback
         raise HTTPException(status_code=500, detail=f"DEBUG: {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
-    return user
+    # Return plain dict to avoid ORM serialization issues
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_active": user.is_active,
+        "is_admin": user.is_admin,
+        "created_at": str(user.created_at),
+    }
 
 
 @app.get("/auth/users", response_model=list[UserResponse], tags=["Auth"])
