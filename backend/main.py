@@ -226,7 +226,7 @@ from pydantic import BaseModel as _BaseModel
 class BulkDeleteRequest(_BaseModel):
     ids: list[int]
 
-@app.delete("/trades/bulk", status_code=status.HTTP_200_OK, tags=["Trades"])
+@app.post("/trades/bulk-delete", status_code=status.HTTP_200_OK, tags=["Trades"])
 def bulk_delete_trades(payload: BulkDeleteRequest, db: Session = Depends(get_db)):
     """Delete multiple trades by ID list."""
     deleted = db.query(Trade).filter(Trade.id.in_(payload.ids)).delete(synchronize_session=False)
