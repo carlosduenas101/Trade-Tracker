@@ -30,11 +30,15 @@ const _THEME_KEY = 'tt_theme';
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(_THEME_KEY, theme);
-  const btn = document.getElementById('themeToggle');
-  if (!btn) return;
   const isBlossom = theme === 'blossom';
-  btn.querySelector('.theme-icon').textContent  = isBlossom ? '🌸' : '🌙';
-  btn.querySelector('.theme-label').textContent = isBlossom ? 'Blossom' : 'Dark';
+  const icon  = isBlossom ? '🌸' : '🌙';
+  const label = isBlossom ? 'Blossom' : 'Dark';
+  ['themeToggle', 'loginThemeToggle'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.querySelector('.theme-icon').textContent  = icon;
+    btn.querySelector('.theme-label').textContent = label;
+  });
 }
 
 function toggleTheme() {
@@ -1449,6 +1453,7 @@ async function init() {
   // Apply saved theme before anything renders
   applyTheme(localStorage.getItem(_THEME_KEY) || 'dark');
   document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+  document.getElementById('loginThemeToggle')?.addEventListener('click', toggleTheme);
 
   // Always wire the login form first (it's in the DOM from page load)
   bindLoginEvents();

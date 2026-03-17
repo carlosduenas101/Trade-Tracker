@@ -93,6 +93,8 @@
 /* Hardcoded colours that need overriding in blossom */
 [data-theme="blossom"] .logo-mark  { color: #fff; }
 [data-theme="blossom"] .btn-primary { color: #fff; }
+[data-theme="blossom"] input[type="date"].input-field,
+[data-theme="blossom"] input[type="datetime-local"].input-field { color-scheme: light; }
 
 /* ── THEME TOGGLE BUTTON ────────────────────────────────────── */
 .theme-toggle {
@@ -352,7 +354,7 @@ body {
 
 input[type="date"].input-field,
 input[type="datetime-local"].input-field {
-  color-scheme: dark;
+  color-scheme: dark; /* overridden for blossom below */
   width: auto;
   min-width: 160px;
 }
@@ -1100,33 +1102,82 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   align-items: center;
   justify-content: center;
   padding: 20px;
+  overflow: hidden;
 }
+
+/* Soft glow behind card — colour adapts via --green-dim */
+.login-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 700px 480px at 50% 52%,
+    var(--green-dim) 0%, transparent 70%);
+  pointer-events: none;
+}
+
 .login-screen[hidden] { display: none; }
 
+/* ── Toggle bar ────────────────────────────────────────────── */
+.login-topbar {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 10;
+}
+
+/* ── Candlestick decorations ───────────────────────────────── */
+.login-deco {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 180px;
+  opacity: 0.11;
+  pointer-events: none;
+}
+.login-deco-left  { right: calc(50% + 228px); }
+.login-deco-right { left:  calc(50% + 228px); }
+.login-deco svg   { width: 100%; height: auto; }
+
+.login-deco .cs-up   { fill: var(--green); stroke: var(--green); stroke-width: 1.5; }
+.login-deco .cs-down { fill: var(--red);   stroke: var(--red);   stroke-width: 1.5; }
+
+@media (max-width: 960px) { .login-deco { display: none; } }
+
+/* ── Card ──────────────────────────────────────────────────── */
 .login-card {
+  position: relative;
+  z-index: 5;
   width: 100%;
-  max-width: 380px;
+  max-width: 420px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
+  border-top: 2px solid var(--accent-primary);
   border-radius: var(--radius-xl);
-  padding: 40px 36px 32px;
-  box-shadow: var(--shadow-modal);
-  animation: slideUp 0.25s ease;
+  padding: 48px 40px 36px;
+  box-shadow: var(--shadow-modal), 0 0 56px var(--green-dim);
+  animation: slideUp 0.28s ease;
 }
 
 .login-logo {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 6px;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.login-logo-mark {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+  border-radius: var(--radius-lg);
 }
 
 .login-subtitle {
   text-align: center;
   color: var(--text-muted);
   font-size: 0.85rem;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .login-form {
@@ -1135,11 +1186,20 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   gap: 16px;
 }
 
+/* Pill-shaped inputs inside login */
+.login-form .input-field {
+  border-radius: 99px;
+  padding: 12px 20px;
+  font-size: 0.92rem;
+}
+
 .login-submit {
   width: 100%;
   justify-content: center;
-  padding: 10px;
-  font-size: 0.9rem;
+  padding: 13px;
+  font-size: 0.95rem;
+  border-radius: 99px;
+  letter-spacing: 0.2px;
   margin-top: 4px;
 }
 
@@ -1147,7 +1207,7 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   text-align: center;
   color: var(--text-muted);
   font-size: 0.75rem;
-  margin-top: 20px;
+  margin-top: 22px;
 }
 
 /* User info in header */
