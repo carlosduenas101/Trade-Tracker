@@ -587,8 +587,8 @@ async function bulkDeleteTrades() {
 
   dom.bulkDeleteBtn.disabled = true;
   try {
-    await apiFetch('/trades/bulk', {
-      method: 'DELETE',
+    await apiFetch('/trades/bulk-delete', {
+      method: 'POST',
       body: JSON.stringify({ ids }),
     });
     showToast(`${ids.length} trade(s) deleted.`, 'success');
