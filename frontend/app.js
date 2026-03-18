@@ -57,8 +57,14 @@ function toggleTheme() {
 }
 
 /* ── Language / i18n ───────────────────────────────────────── */
-const _LANG_KEY   = 'tt_lang';
+const _LANG_KEY    = 'tt_lang';
 let   _currentLang = 'en';
+
+const _LANG_META = {
+  en: { flag: '🇺🇸', label: 'EN' },
+  es: { flag: '🇪🇸', label: 'ES' },
+  fr: { flag: '🇫🇷', label: 'FR' },
+};
 
 function t(key) {
   const lang = TRANSLATIONS[_currentLang] || TRANSLATIONS.en;
@@ -82,26 +88,55 @@ function applyLang(lang) {
     if (val !== undefined) el.placeholder = val;
   });
 
-  // Language toggle button labels
-  ['langToggle', 'loginLangToggle'].forEach(id => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.querySelector('.lang-label').textContent = lang.toUpperCase();
+  // Update all dropdown toggle buttons + mark active option
+  const meta = _LANG_META[lang] || _LANG_META.en;
+  ['langDropdown', 'loginLangDropdown'].forEach(id => {
+    const dd = document.getElementById(id);
+    if (!dd) return;
+    const flagEl  = dd.querySelector('.lang-flag');
+    const labelEl = dd.querySelector('.lang-label');
+    if (flagEl)  flagEl.textContent  = meta.flag;
+    if (labelEl) labelEl.textContent = meta.label;
+    dd.querySelectorAll('.lang-option').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.lang === lang);
+    });
   });
 
   // Default date filter label
   const tfDateLabel = document.getElementById('tfDateLabel');
-  if (tfDateLabel && tfDateLabel.textContent) {
-    tfDateLabel.textContent = t('filter.last30');
-  }
+  if (tfDateLabel) tfDateLabel.textContent = t('filter.last30');
 
-  // Symbol filter labels
+  // Symbol filter label
   const tfSymbolLabel = document.getElementById('tfSymbolLabel');
   if (tfSymbolLabel) tfSymbolLabel.textContent = t('filter.allsymbols');
 }
 
-function toggleLang() {
-  applyLang(_currentLang === 'en' ? 'es' : 'en');
+function initLangDropdowns() {
+  document.querySelectorAll('.lang-dropdown').forEach(dd => {
+    const btn = dd.querySelector('.lang-toggle');
+
+    // Toggle open/close on button click
+    btn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = dd.classList.contains('open');
+      // Close every dropdown first
+      document.querySelectorAll('.lang-dropdown.open').forEach(d => d.classList.remove('open'));
+      if (!isOpen) dd.classList.add('open');
+    });
+
+    // Select language on option click
+    dd.querySelectorAll('.lang-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        applyLang(opt.dataset.lang);
+        dd.classList.remove('open');
+      });
+    });
+  });
+
+  // Close all dropdowns when clicking outside
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.lang-dropdown.open').forEach(d => d.classList.remove('open'));
+  });
 }
 
 /* ── Background canvas animation ───────────────────────────── */
@@ -1757,8 +1792,7 @@ async function init() {
   applyLang(localStorage.getItem(_LANG_KEY) || 'en');
   document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
   document.getElementById('loginThemeToggle')?.addEventListener('click', toggleTheme);
-  document.getElementById('langToggle')?.addEventListener('click', toggleLang);
-  document.getElementById('loginLangToggle')?.addEventListener('click', toggleLang);
+  initLangDropdowns();
   initBgCanvas();
   initLoginCanvas();
 
