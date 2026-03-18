@@ -24,6 +24,9 @@
         <span class="theme-icon">🌙</span>
         <span class="theme-label">Dark</span>
       </button>
+      <button class="lang-toggle" id="loginLangToggle" title="Switch language">
+        <span class="lang-label">EN</span>
+      </button>
     </div>
 
     <!-- Candlestick decorations -->
@@ -69,22 +72,22 @@
         </svg>
         <h1 class="app-title">IllusTrade</h1>
       </div>
-      <p class="login-subtitle">Sign in to your account</p>
+      <p class="login-subtitle" data-i18n="login.subtitle">Sign in to your account</p>
       <form class="login-form" id="loginForm" novalidate>
         <div class="form-group">
-          <label class="form-label" for="loginUsername">Username</label>
+          <label class="form-label" for="loginUsername" data-i18n="login.username">Username</label>
           <input class="input-field" type="text" id="loginUsername"
-            autocomplete="username" placeholder="your username" required />
+            autocomplete="username" placeholder="your username" data-i18n-ph="login.username.ph" required />
         </div>
         <div class="form-group">
-          <label class="form-label" for="loginPassword">Password</label>
+          <label class="form-label" for="loginPassword" data-i18n="login.password">Password</label>
           <input class="input-field" type="password" id="loginPassword"
             autocomplete="current-password" placeholder="••••••••" required />
         </div>
         <div class="form-error" id="loginError" hidden></div>
-        <button type="submit" class="btn btn-primary login-submit" id="loginBtn">Sign In</button>
+        <button type="submit" class="btn btn-primary login-submit" id="loginBtn" data-i18n="login.submit">Sign In</button>
       </form>
-      <p class="login-invite">Access by invitation only.</p>
+      <p class="login-invite" data-i18n="login.invite">Access by invitation only.</p>
     </div>
 
   </div>
@@ -110,9 +113,12 @@
         <span class="theme-icon">🌙</span>
         <span class="theme-label">Dark</span>
       </button>
+      <button class="lang-toggle" id="langToggle" title="Switch language">
+        <span class="lang-label">EN</span>
+      </button>
       <div class="user-info" id="userInfo" hidden>
         <span class="user-name" id="userNameDisplay"></span>
-        <button class="btn btn-ghost btn-sm" id="logoutBtn">Sign Out</button>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn" data-i18n="header.signout">Sign Out</button>
       </div>
     </div>
   </header>
@@ -123,18 +129,18 @@
     <!-- ── TOOLBAR ──────────────────────────────────── -->
     <section class="toolbar" aria-label="Filters and actions">
       <div class="filter-group">
-        <label class="filter-label" for="startDate">From</label>
+        <label class="filter-label" for="startDate" data-i18n="toolbar.from">From</label>
         <input class="input-field" type="date" id="startDate" />
-        <label class="filter-label" for="endDate">To</label>
+        <label class="filter-label" for="endDate" data-i18n="toolbar.to">To</label>
         <input class="input-field" type="date" id="endDate" />
-        <button class="btn btn-secondary" id="applyFilter">Apply</button>
-        <button class="btn btn-ghost" id="clearFilter">Clear</button>
+        <button class="btn btn-secondary" id="applyFilter" data-i18n="toolbar.apply">Apply</button>
+        <button class="btn btn-ghost" id="clearFilter" data-i18n="toolbar.clear">Clear</button>
       </div>
       <div class="action-group">
-        <button class="btn btn-secondary" id="importBtn">&#8593; Import CSV</button>
-        <a class="btn btn-ghost" id="templateBtn" href="#" download>&#8595; Template</a>
+        <button class="btn btn-secondary" id="importBtn" data-i18n="toolbar.import">↑ Import CSV</button>
+        <a class="btn btn-ghost" id="templateBtn" href="#" download data-i18n="toolbar.template">↓ Template</a>
         <input type="file" id="csvFileInput" accept=".csv" style="display:none" />
-        <button class="btn btn-primary" id="addTradeBtn">+ Add Trade</button>
+        <button class="btn btn-primary" id="addTradeBtn" data-i18n="toolbar.addtrade">+ Add Trade</button>
       </div>
     </section>
 
@@ -142,55 +148,55 @@
     <section class="metrics-grid" aria-label="Performance metrics">
 
       <article class="metric-card" id="card-winRate">
-        <div class="metric-label">Win Rate</div>
+        <div class="metric-label" data-i18n="metric.winrate">Win Rate</div>
         <div class="metric-value" id="metricWinRate">—</div>
         <div class="metric-sub" id="metricWinRateSub">&nbsp;</div>
       </article>
 
       <article class="metric-card" id="card-pnl">
-        <div class="metric-label">Total P&amp;L</div>
+        <div class="metric-label" data-i18n="metric.pnl">Total P&amp;L</div>
         <div class="metric-value" id="metricPnl">—</div>
         <div class="metric-sub" id="metricPnlSub">&nbsp;</div>
       </article>
 
       <article class="metric-card" id="card-drawdown">
-        <div class="metric-label">Max Drawdown</div>
+        <div class="metric-label" data-i18n="metric.drawdown">Max Drawdown</div>
         <div class="metric-value" id="metricDrawdown">—</div>
         <div class="metric-sub" id="metricDrawdownSub">&nbsp;</div>
       </article>
 
       <article class="metric-card" id="card-rr">
-        <div class="metric-label">Avg R:R</div>
+        <div class="metric-label" data-i18n="metric.rr">Avg R:R</div>
         <div class="metric-value" id="metricRR">—</div>
         <div class="metric-sub" id="metricRRSub">&nbsp;</div>
       </article>
 
       <article class="metric-card" id="card-streak">
-        <div class="metric-label">Current Streak</div>
+        <div class="metric-label" data-i18n="metric.streak">Current Streak</div>
         <div class="metric-value" id="metricStreak">—</div>
         <div class="metric-sub" id="metricStreakSub">&nbsp;</div>
       </article>
 
       <article class="metric-card" id="card-total">
-        <div class="metric-label">Total Trades</div>
+        <div class="metric-label" data-i18n="metric.total">Total Trades</div>
         <div class="metric-value" id="metricTotal">—</div>
         <div class="metric-sub" id="metricTotalSub">&nbsp;</div>
       </article>
 
       <article class="metric-card" id="card-avgRoe">
-        <div class="metric-label">Avg ROE %</div>
+        <div class="metric-label" data-i18n="metric.avgroe">Avg ROE %</div>
         <div class="metric-value" id="metricAvgRoe">—</div>
         <div class="metric-sub" id="metricAvgRoeSub">&nbsp;</div>
       </article>
 
       <article class="metric-card" id="card-avgEntries">
-        <div class="metric-label">Avg Entries</div>
+        <div class="metric-label" data-i18n="metric.avgentries">Avg Entries</div>
         <div class="metric-value" id="metricAvgEntries">—</div>
         <div class="metric-sub" id="metricAvgEntriesSub">&nbsp;</div>
       </article>
 
       <article class="metric-card" id="card-avgDuration">
-        <div class="metric-label">Avg Duration</div>
+        <div class="metric-label" data-i18n="metric.avgduration">Avg Duration</div>
         <div class="metric-value" id="metricAvgDuration">—</div>
         <div class="metric-sub" id="metricAvgDurationSub">&nbsp;</div>
       </article>
@@ -200,22 +206,22 @@
     <!-- ── P&L CHART ──────────────────────────────────── -->
     <section class="chart-section" aria-label="Cumulative P&L chart">
       <div class="section-header">
-        <h2 class="section-title">Cumulative P&amp;L</h2>
+        <h2 class="section-title" data-i18n="chart.title">Cumulative P&amp;L</h2>
         <div class="chart-legend">
-          <span class="legend-dot legend-win"></span><span>Positive</span>
-          <span class="legend-dot legend-loss"></span><span>Negative</span>
+          <span class="legend-dot legend-win"></span><span data-i18n="chart.positive">Positive</span>
+          <span class="legend-dot legend-loss"></span><span data-i18n="chart.negative">Negative</span>
         </div>
       </div>
       <div class="chart-wrapper">
         <canvas id="pnlChart" role="img" aria-label="Cumulative P&L line chart"></canvas>
-        <div class="chart-empty" id="chartEmpty">No trade data to display.</div>
+        <div class="chart-empty" id="chartEmpty" data-i18n="chart.empty">No trade data to display.</div>
       </div>
     </section>
 
     <!-- ── TRADES TABLE ───────────────────────────────── -->
     <section class="table-section" aria-label="Trade history">
       <div class="section-header">
-        <h2 class="section-title">Trade History</h2>
+        <h2 class="section-title" data-i18n="table.title">Trade History</h2>
         <div style="display:flex;align-items:center;gap:10px;">
           <button class="btn btn-danger" id="bulkDeleteBtn" hidden>&#128465; Delete Selected (<span id="selectedCount">0</span>)</button>
           <span class="trade-count" id="tradeCount">0 trades</span>
@@ -234,19 +240,19 @@
           </button>
           <div class="tf-panel" id="tfDatePanel" hidden>
             <div class="tf-quick-presets">
-              <button class="tf-quick-btn" data-days="7">Past 7 days</button>
-              <button class="tf-quick-btn" data-days="30">Past 30 days</button>
-              <button class="tf-quick-btn" data-days="90">Past 90 days</button>
+              <button class="tf-quick-btn" data-days="7" data-i18n="filter.past7">Past 7 days</button>
+              <button class="tf-quick-btn" data-days="30" data-i18n="filter.past30">Past 30 days</button>
+              <button class="tf-quick-btn" data-days="90" data-i18n="filter.past90">Past 90 days</button>
             </div>
             <div class="tf-panel-divider"></div>
-            <div class="tf-panel-label" style="margin-bottom:8px;">Custom Range</div>
+            <div class="tf-panel-label" style="margin-bottom:8px;" data-i18n="filter.custom">Custom Range</div>
             <div class="tf-date-row">
               <div class="tf-date-col">
-                <label class="tf-panel-label">From</label>
+                <label class="tf-panel-label" data-i18n="filter.from">From</label>
                 <input class="input-field tf-date-input" type="date" id="tfStartDate" />
               </div>
               <div class="tf-date-col">
-                <label class="tf-panel-label">To</label>
+                <label class="tf-panel-label" data-i18n="filter.to">To</label>
                 <input class="input-field tf-date-input" type="date" id="tfEndDate" />
               </div>
             </div>
@@ -262,12 +268,12 @@
             <span class="tf-arrow">▾</span>
           </button>
           <div class="tf-panel" id="tfSymbolPanel" hidden>
-            <input class="input-field tf-search" type="text" id="tfSymbolSearch" placeholder="Search symbol…" autocomplete="off" />
+            <input class="input-field tf-search" type="text" id="tfSymbolSearch" placeholder="Search symbol…" data-i18n-ph="filter.search" autocomplete="off" />
             <div class="tf-symbol-list" id="tfSymbolList"></div>
             <div class="tf-panel-divider"></div>
             <div class="tf-panel-row">
-              <button class="tf-text-btn" id="tfSymbolSelectAll">Select all</button>
-              <button class="tf-text-btn" id="tfSymbolClear">Clear</button>
+              <button class="tf-text-btn" id="tfSymbolSelectAll" data-i18n="filter.selectall">Select all</button>
+              <button class="tf-text-btn" id="tfSymbolClear" data-i18n="filter.clear">Clear</button>
             </div>
           </div>
         </div>
@@ -275,9 +281,9 @@
         <!-- Direction Select -->
         <div class="tf-group">
           <select class="input-field tf-select" id="filterSide">
-            <option value="">All Directions</option>
-            <option value="long">Long</option>
-            <option value="short">Short</option>
+            <option value="" data-i18n="filter.alldirections">All Directions</option>
+            <option value="long" data-i18n="filter.long">Long</option>
+            <option value="short" data-i18n="filter.short">Short</option>
           </select>
         </div>
 
@@ -288,20 +294,20 @@
           <thead>
             <tr>
               <th scope="col"><input type="checkbox" id="selectAll" title="Select all" /></th>
-              <th scope="col">Date</th>
-              <th scope="col">Symbol</th>
-              <th scope="col">Side</th>
-              <th scope="col">Entry</th>
-              <th scope="col">Exit</th>
-              <th scope="col">Qty</th>
-              <th scope="col">P&amp;L</th>
-              <th scope="col">ROE %</th>
-              <th scope="col">R:R</th>
-              <th scope="col">Leverage</th>
-              <th scope="col">Duration</th>
-              <th scope="col">Source</th>
-              <th scope="col">Notes</th>
-              <th scope="col">Actions</th>
+              <th scope="col" data-i18n="th.date">Date</th>
+              <th scope="col" data-i18n="th.symbol">Symbol</th>
+              <th scope="col" data-i18n="th.side">Side</th>
+              <th scope="col" data-i18n="th.entry">Entry</th>
+              <th scope="col" data-i18n="th.exit">Exit</th>
+              <th scope="col" data-i18n="th.qty">Qty</th>
+              <th scope="col" data-i18n="th.pnl">P&amp;L</th>
+              <th scope="col" data-i18n="th.roe">ROE %</th>
+              <th scope="col" data-i18n="th.rr">R:R</th>
+              <th scope="col" data-i18n="th.leverage">Leverage</th>
+              <th scope="col" data-i18n="th.duration">Duration</th>
+              <th scope="col" data-i18n="th.source">Source</th>
+              <th scope="col" data-i18n="th.notes">Notes</th>
+              <th scope="col" data-i18n="th.actions">Actions</th>
             </tr>
           </thead>
           <tbody id="tradesBody">
@@ -430,8 +436,8 @@
         <div class="form-error" id="formError" hidden></div>
 
         <div class="modal-footer">
-          <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="submitBtn">Add Trade</button>
+          <button type="button" class="btn btn-ghost" id="cancelBtn" data-i18n="modal.cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="submitBtn" data-i18n="modal.submit.add">Add Trade</button>
         </div>
 
       </form>
@@ -442,13 +448,13 @@
   <div class="modal-backdrop modal-backdrop--sm" id="confirmBackdrop" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
     <div class="modal modal--sm">
       <div class="modal-header">
-        <h2 class="modal-title" id="confirmTitle">Delete Trade</h2>
+        <h2 class="modal-title" id="confirmTitle" data-i18n="confirm.title">Delete Trade</h2>
         <button class="modal-close" id="confirmClose" aria-label="Close">&times;</button>
       </div>
-      <p class="confirm-message">Are you sure you want to delete this trade? This action cannot be undone.</p>
+      <p class="confirm-message" data-i18n="confirm.msg">Are you sure you want to delete this trade? This action cannot be undone.</p>
       <div class="modal-footer">
-        <button class="btn btn-ghost" id="confirmCancelBtn">Cancel</button>
-        <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+        <button class="btn btn-ghost" id="confirmCancelBtn" data-i18n="confirm.cancel">Cancel</button>
+        <button class="btn btn-danger" id="confirmDeleteBtn" data-i18n="confirm.delete">Delete</button>
       </div>
     </div>
   </div>
@@ -457,6 +463,7 @@
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="config.js"></script>
+  <script src="translations.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

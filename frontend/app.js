@@ -52,6 +52,54 @@ function toggleTheme() {
   applyTheme(_THEME_CYCLE[(idx + 1) % _THEME_CYCLE.length]);
 }
 
+/* ── Language / i18n ───────────────────────────────────────── */
+const _LANG_KEY   = 'tt_lang';
+let   _currentLang = 'en';
+
+function t(key) {
+  const lang = TRANSLATIONS[_currentLang] || TRANSLATIONS.en;
+  return lang[key] ?? TRANSLATIONS.en[key] ?? key;
+}
+
+function applyLang(lang) {
+  _currentLang = lang;
+  localStorage.setItem(_LANG_KEY, lang);
+  document.documentElement.lang = lang;
+
+  // Static elements with data-i18n
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const val = t(el.dataset.i18n);
+    if (val !== undefined) el.textContent = val;
+  });
+
+  // Placeholder attributes
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const val = t(el.dataset.i18nPh);
+    if (val !== undefined) el.placeholder = val;
+  });
+
+  // Language toggle button labels
+  ['langToggle', 'loginLangToggle'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.querySelector('.lang-label').textContent = lang.toUpperCase();
+  });
+
+  // Default date filter label
+  const tfDateLabel = document.getElementById('tfDateLabel');
+  if (tfDateLabel && tfDateLabel.textContent) {
+    tfDateLabel.textContent = t('filter.last30');
+  }
+
+  // Symbol filter labels
+  const tfSymbolLabel = document.getElementById('tfSymbolLabel');
+  if (tfSymbolLabel) tfSymbolLabel.textContent = t('filter.allsymbols');
+}
+
+function toggleLang() {
+  applyLang(_currentLang === 'en' ? 'es' : 'en');
+}
+
 /* ── Background canvas animation ───────────────────────────── */
 function initBgCanvas() {
   const canvas = document.getElementById('bgCanvas');
@@ -582,10 +630,10 @@ async function fetchMetrics(startDate, endDate) {
     const qs = buildQuery({ start_date: startDate, end_date: endDate });
     const data = await apiFetch(`/metrics${qs}`);
     renderMetrics(data);
-    setConnectionStatus('connected', 'Connected');
+    setConnectionStatus('connected', t('header.connected'));
   } catch (err) {
     cards.forEach(el => { el.textContent = '—'; el.classList.remove('skeleton'); });
-    setConnectionStatus('error', 'Offline');
+    setConnectionStatus('error', t('header.offline'));
     console.error('fetchMetrics:', err);
   }
 }
@@ -616,19 +664,19 @@ function renderMetrics(data) {
   // Total P&L
   dom.metricPnl.textContent = total_pnl != null ? formatCurrency(total_pnl) : '—';
   dom.metricPnl.classList.remove('skeleton');
-  dom.metricPnlSub.textContent = 'Realized';
+  dom.metricPnlSub.textContent = t('metric.realized');
   applyCardColor(dom.cardPnl, total_pnl > 0 ? 'positive' : total_pnl < 0 ? 'negative' : '');
 
   // Max Drawdown
   dom.metricDrawdown.textContent = max_drawdown != null ? formatCurrency(max_drawdown) : '—';
   dom.metricDrawdown.classList.remove('skeleton');
-  dom.metricDrawdownSub.textContent = 'Peak to trough';
+  dom.metricDrawdownSub.textContent = t('metric.peaktotrough');
   applyCardColor(dom.cardDrawdown, 'negative');
 
   // Avg R:R
   dom.metricRR.textContent = avg_rr != null ? formatRR(avg_rr) : '—';
   dom.metricRR.classList.remove('skeleton');
-  dom.metricRRSub.textContent = avg_rr >= 1 ? 'Favorable' : avg_rr != null ? 'Unfavorable' : '';
+  dom.metricRRSub.textContent = avg_rr >= 1 ? t('metric.favorable') : avg_rr != null ? t('metric.unfavorable') : '';
   applyCardColor(dom.cardRR, avg_rr >= 1 ? 'positive' : avg_rr != null ? 'negative' : '');
 
   // Streak
@@ -639,31 +687,31 @@ function renderMetrics(data) {
     ? `<span class="streak-badge streak-${streakType === 'win' ? 'win' : 'loss'}">${escHtml(streakLabel)}</span>`
     : '—';
   dom.metricStreak.classList.remove('skeleton');
-  dom.metricStreakSub.textContent = streakType === 'win' ? 'Win streak' : streakType === 'loss' ? 'Loss streak' : '';
+  dom.metricStreakSub.textContent = streakType === 'win' ? t('metric.winstreak') : streakType === 'loss' ? t('metric.lossstreak') : '';
 
   // Total Trades
   dom.metricTotal.textContent = total_trades ?? '0';
   dom.metricTotal.classList.remove('skeleton');
-  dom.metricTotalSub.textContent = 'Closed positions';
+  dom.metricTotalSub.textContent = t('metric.closedpos');
 
   // Avg ROE %
   const avg_roe = data.avg_roe;
   dom.metricAvgRoe.textContent = avg_roe != null ? formatPercent(avg_roe) : '—';
   dom.metricAvgRoe.classList.remove('skeleton');
-  dom.metricAvgRoeSub.textContent = 'Per trade average';
+  dom.metricAvgRoeSub.textContent = t('metric.pertrade');
   applyCardColor(dom.cardAvgRoe, avg_roe > 0 ? 'positive' : avg_roe < 0 ? 'negative' : '');
 
   // Avg Entries
   const avg_entries = data.avg_entries;
   dom.metricAvgEntries.textContent = avg_entries != null && avg_entries > 0 ? Number(avg_entries).toFixed(1) : '—';
   dom.metricAvgEntries.classList.remove('skeleton');
-  dom.metricAvgEntriesSub.textContent = 'Entries per trade';
+  dom.metricAvgEntriesSub.textContent = t('metric.entriespertrade');
 
   // Avg Duration
   const avg_duration = data.avg_duration;
   dom.metricAvgDuration.textContent = avg_duration != null && avg_duration > 0 ? formatDuration(avg_duration) : '—';
   dom.metricAvgDuration.classList.remove('skeleton');
-  dom.metricAvgDurationSub.textContent = 'Per trade average';
+  dom.metricAvgDurationSub.textContent = t('metric.pertrade');
 }
 
 function applyCardColor(cardEl, type) {
@@ -686,7 +734,7 @@ async function fetchTrades(startDate, endDate) {
   // Loading row
   dom.tradesBody.innerHTML = `
     <tr class="table-empty-row">
-      <td colspan="12">Loading trades…</td>
+      <td colspan="12">${t('table.loading')}</td>
     </tr>`;
 
   try {
@@ -699,7 +747,7 @@ async function fetchTrades(startDate, endDate) {
   } catch (err) {
     dom.tradesBody.innerHTML = `
       <tr class="table-empty-row">
-        <td colspan="12">Failed to load trades.</td>
+        <td colspan="12">${t('table.error')}</td>
       </tr>`;
     dom.tableError.hidden = false;
     console.error('fetchTrades:', err);
@@ -727,7 +775,7 @@ function renderTradesTable(trades) {
   if (!trades.length) {
     dom.tradesBody.innerHTML = `
       <tr class="table-empty-row" id="tableEmpty">
-        <td colspan="12">No trades found. Add your first trade or sync your exchange.</td>
+        <td colspan="12">${t('table.empty')}</td>
       </tr>`;
     return;
   }
@@ -840,7 +888,7 @@ function calcDurationMinutes(open, close) {
  */
 async function addTrade(tradeData) {
   dom.submitBtn.disabled = true;
-  dom.submitBtn.textContent = 'Adding…';
+  dom.submitBtn.textContent = t('modal.adding');
   dom.formError.hidden = true;
 
   try {
@@ -849,14 +897,14 @@ async function addTrade(tradeData) {
       body: JSON.stringify(tradeData),
     });
     closeAddModal();
-    showToast('Trade added successfully.', 'success');
+    showToast(t('toast.trade.added'), 'success');
     await refreshAll();
   } catch (err) {
     dom.formError.textContent = `Error: ${err.message}`;
     dom.formError.hidden = false;
   } finally {
     dom.submitBtn.disabled = false;
-    dom.submitBtn.textContent = 'Add Trade';
+    dom.submitBtn.textContent = t('modal.submit.add');
   }
 }
 
@@ -866,7 +914,7 @@ async function addTrade(tradeData) {
 
 async function updateTrade(id, tradeData) {
   dom.submitBtn.disabled = true;
-  dom.submitBtn.textContent = 'Saving…';
+  dom.submitBtn.textContent = t('modal.saving');
   dom.formError.hidden = true;
 
   try {
@@ -875,14 +923,14 @@ async function updateTrade(id, tradeData) {
       body: JSON.stringify(tradeData),
     });
     closeAddModal();
-    showToast('Trade updated.', 'success');
+    showToast(t('toast.trade.updated'), 'success');
     await refreshAll();
   } catch (err) {
     dom.formError.textContent = `Error: ${err.message}`;
     dom.formError.hidden = false;
   } finally {
     dom.submitBtn.disabled = false;
-    dom.submitBtn.textContent = 'Save Changes';
+    dom.submitBtn.textContent = t('modal.submit.edit');
   }
 }
 
@@ -913,7 +961,7 @@ function clearSelection() {
 async function bulkDeleteTrades() {
   const ids = [...state.selectedIds];
   if (!ids.length) return;
-  if (!confirm(`Delete ${ids.length} trade(s)? This cannot be undone.`)) return;
+  if (!confirm(`Delete ${ids.length} ${t('toast.bulk.confirm')}`)) return;
 
   dom.bulkDeleteBtn.disabled = true;
   try {
@@ -921,11 +969,11 @@ async function bulkDeleteTrades() {
       method: 'POST',
       body: JSON.stringify({ ids }),
     });
-    showToast(`${ids.length} trade(s) deleted.`, 'success');
+    showToast(`${ids.length} ${t('toast.bulk.deleted')}`, 'success');
     state.selectedIds.clear();
     await refreshAll();
   } catch (err) {
-    showToast(`Bulk delete failed: ${err.message}`, 'error');
+    showToast(`${t('toast.bulk.fail')} ${err.message}`, 'error');
   } finally {
     dom.bulkDeleteBtn.disabled = false;
   }
@@ -941,19 +989,19 @@ async function bulkDeleteTrades() {
  */
 async function deleteTrade(id) {
   dom.confirmDeleteBtn.disabled = true;
-  dom.confirmDeleteBtn.textContent = 'Deleting…';
+  dom.confirmDeleteBtn.textContent = t('confirm.deleting');
 
   try {
     await apiFetch(`/trades/${id}`, { method: 'DELETE' });
     closeConfirmModal();
-    showToast('Trade deleted.', 'success');
+    showToast(t('toast.trade.deleted'), 'success');
     await refreshAll();
   } catch (err) {
-    showToast(`Delete failed: ${err.message}`, 'error');
+    showToast(`${t('toast.delete.fail')} ${err.message}`, 'error');
     console.error('deleteTrade:', err);
   } finally {
     dom.confirmDeleteBtn.disabled = false;
-    dom.confirmDeleteBtn.textContent = 'Delete';
+    dom.confirmDeleteBtn.textContent = t('confirm.delete');
     state.pendingDeleteId = null;
   }
 }
@@ -967,7 +1015,7 @@ async function importCSV(file) {
   formData.append('file', file);
 
   dom.importBtn.disabled = true;
-  dom.importBtn.textContent = 'Importing…';
+  dom.importBtn.textContent = t('modal.adding');
 
   try {
     const token = getToken();
@@ -981,17 +1029,17 @@ async function importCSV(file) {
       throw new Error(`Server error ${res.status}: ${text}`);
     }
     const result = await res.json();
-    const msg = `Imported ${result.imported} trade(s).` +
-      (result.errors.length ? ` ${result.errors.length} row(s) skipped — see console.` : '');
+    const msg = `${t('toast.import.ok')} ${result.imported} trade(s).` +
+      (result.errors.length ? ` ${result.errors.length} ${t('toast.import.skipped')}` : '');
     showToast(msg, result.errors.length ? 'info' : 'success', 6000);
     if (result.errors.length) console.warn('Import row errors:', result.errors);
     await refreshAll();
   } catch (err) {
-    showToast(`Import failed: ${err.message}`, 'error', 8000);
+    showToast(`${t('toast.import.fail')} ${err.message}`, 'error', 8000);
     console.error('Import error:', err);
   } finally {
     dom.importBtn.disabled = false;
-    dom.importBtn.textContent = '↑ Import CSV';
+    dom.importBtn.textContent = t('toolbar.import');
     dom.csvFileInput.value = '';
   }
 }
@@ -1152,8 +1200,8 @@ function openAddModal() {
   state.editingId = null;
   dom.tradeForm.reset();
   dom.formError.hidden = true;
-  dom.modalBackdrop.querySelector('.modal-title').textContent = 'Add Trade';
-  dom.submitBtn.textContent = 'Add Trade';
+  dom.modalBackdrop.querySelector('.modal-title').textContent = t('modal.addtrade');
+  dom.submitBtn.textContent = t('modal.submit.add');
   dom.submitBtn.disabled = false;
   dom.modalBackdrop.hidden = false;
   dom.qtyConversion.style.display = 'none';
@@ -1169,8 +1217,8 @@ function openEditModal(id) {
 
   dom.tradeForm.reset();
   dom.formError.hidden = true;
-  dom.modalBackdrop.querySelector('.modal-title').textContent = 'Edit Trade';
-  dom.submitBtn.textContent = 'Save Changes';
+  dom.modalBackdrop.querySelector('.modal-title').textContent = t('modal.edittrade');
+  dom.submitBtn.textContent = t('modal.submit.edit');
   dom.submitBtn.disabled = false;
 
   dom.fSymbol.value   = trade.symbol ?? '';
@@ -1441,7 +1489,7 @@ function populateSymbolList(trades) {
 function updateSymbolLabel() {
   const { symbols } = state.tableFilter;
   if (symbols.size === 0) {
-    dom.tfSymbolLabel.textContent = 'All Symbols';
+    dom.tfSymbolLabel.textContent = t('filter.allsymbols');
   } else if (symbols.size === 1) {
     dom.tfSymbolLabel.textContent = [...symbols][0];
   } else {
@@ -1696,14 +1744,17 @@ function setDefaultDateRange() {
   dom.startDate.value   = priorStr;
   dom.tfEndDate.value   = todayStr;
   dom.tfStartDate.value = priorStr;
-  if (dom.tfDateLabel) dom.tfDateLabel.textContent = 'Last 30 days';
+  if (dom.tfDateLabel) dom.tfDateLabel.textContent = t('filter.last30');
 }
 
 async function init() {
   // Apply saved theme before anything renders
   applyTheme(localStorage.getItem(_THEME_KEY) || 'dark');
+  applyLang(localStorage.getItem(_LANG_KEY) || 'en');
   document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
   document.getElementById('loginThemeToggle')?.addEventListener('click', toggleTheme);
+  document.getElementById('langToggle')?.addEventListener('click', toggleLang);
+  document.getElementById('loginLangToggle')?.addEventListener('click', toggleLang);
   initBgCanvas();
   initLoginCanvas();
 
