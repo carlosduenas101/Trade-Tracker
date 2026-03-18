@@ -24,9 +24,18 @@
         <span class="theme-icon">🌙</span>
         <span class="theme-label">Dark</span>
       </button>
-      <button class="lang-toggle" id="loginLangToggle" title="Switch language">
-        <span class="lang-label">EN</span>
-      </button>
+      <div class="lang-dropdown" id="loginLangDropdown">
+        <button class="lang-toggle" id="loginLangToggle" title="Switch language">
+          <span class="lang-flag">🇺🇸</span>
+          <span class="lang-label">EN</span>
+          <span class="lang-arrow">▾</span>
+        </button>
+        <div class="lang-menu">
+          <button class="lang-option active" data-lang="en">🇺🇸 English</button>
+          <button class="lang-option" data-lang="es">🇪🇸 Español</button>
+          <button class="lang-option" data-lang="fr">🇫🇷 Français</button>
+        </div>
+      </div>
     </div>
 
     <!-- Candlestick decorations -->
@@ -99,9 +108,18 @@
         <span class="theme-icon">🌙</span>
         <span class="theme-label">Dark</span>
       </button>
-      <button class="lang-toggle" id="langToggle" title="Switch language">
-        <span class="lang-label">EN</span>
-      </button>
+      <div class="lang-dropdown" id="langDropdown">
+        <button class="lang-toggle" id="langToggle" title="Switch language">
+          <span class="lang-flag">🇺🇸</span>
+          <span class="lang-label">EN</span>
+          <span class="lang-arrow">▾</span>
+        </button>
+        <div class="lang-menu">
+          <button class="lang-option active" data-lang="en">🇺🇸 English</button>
+          <button class="lang-option" data-lang="es">🇪🇸 Español</button>
+          <button class="lang-option" data-lang="fr">🇫🇷 Français</button>
+        </div>
+      </div>
       <div class="user-info" id="userInfo" hidden>
         <span class="user-name" id="userNameDisplay"></span>
         <button class="btn btn-ghost btn-sm" id="logoutBtn" data-i18n="header.signout">Sign Out</button>
