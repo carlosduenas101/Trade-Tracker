@@ -28,21 +28,25 @@ function clearAuth() {
 const _THEME_KEY = 'tt_theme';
 
 const _THEME_META = {
-  dark:    { icon: '🌙', label: 'Dark'    },
-  purple:  { icon: '🟣', label: 'Purple'  },
-  blossom: { icon: '🌸', label: 'Blossom' },
+  dark:    { icon: '🌙', label: 'Dark',    logo: 'Imges/NeonGreenLogo.png' },
+  purple:  { icon: '🟣', label: 'Purple',  logo: 'Imges/PurpleLogo.png'    },
+  blossom: { icon: '🌸', label: 'Blossom', logo: 'Imges/BloomLogo.png'     },
 };
 const _THEME_CYCLE = ['dark', 'purple', 'blossom'];
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(_THEME_KEY, theme);
-  const { icon, label } = _THEME_META[theme] || _THEME_META.dark;
+  const { icon, label, logo } = _THEME_META[theme] || _THEME_META.dark;
   ['themeToggle', 'loginThemeToggle'].forEach(id => {
     const btn = document.getElementById(id);
     if (!btn) return;
     btn.querySelector('.theme-icon').textContent  = icon;
     btn.querySelector('.theme-label').textContent = label;
+  });
+  ['headerLogo', 'loginLogo'].forEach(id => {
+    const img = document.getElementById(id);
+    if (img) img.src = logo;
   });
 }
 
