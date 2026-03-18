@@ -242,20 +242,15 @@ body {
   gap: 12px;
 }
 
-/* ── Logo icon (inline SVG replacing the old IT box) ────────── */
-.logo-icon {
-  width: 32px;
-  height: 32px;
+/* ── Logo images (PNG per theme) ────────────────────────────── */
+.logo-img {
+  display: block;
+  width: auto;
   flex-shrink: 0;
-  overflow: visible;
+  object-fit: contain;
 }
-.logo-icon .lbar   { fill:   var(--text-primary); }
-.logo-icon .larrow { stroke: var(--accent-primary); }
-
-.login-logo-icon {
-  width: 44px;
-  height: 44px;
-}
+.logo-img--header { height: 34px; }
+.logo-img--login  { height: 52px; }
 
 .app-title {
   font-size: 1.1rem;
