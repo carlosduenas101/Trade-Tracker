@@ -457,6 +457,7 @@ async def import_trades(
     """
     Bulk import trades from a CSV file.
     Download /trades/template for the expected column format.
+    Each row is committed independently so one bad row never blocks the others.
     """
     content = await file.read()
     try:
@@ -475,35 +476,61 @@ async def import_trades(
             break
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     imported = 0
+    skipped = 0
     errors = []
 
+    _side_aliases = {"buy": "long", "sell": "short"}
+
     for i, raw_row in enumerate(reader, start=2):  # row 1 is header
+        # Skip completely blank rows
+        if not any((v or '').strip() for v in raw_row.values()):
+            continue
+
         row = _normalise_row(raw_row)
         try:
             symbol = row.get("symbol", "").upper()
-            side = row.get("side", "").lower()
-            entry_price = _parse_float(row.get("entry_price", ""))
-            exit_price = _parse_float(row.get("exit_price", ""))
-            quantity = _parse_float(row.get("quantity", ""))
-            pnl = _parse_float(row.get("pnl", ""))
-            open_time = _parse_dt(row.get("open_time", ""))
-            close_time = _parse_dt(row.get("close_time", ""))
+            side_raw = row.get("side", "").lower()
+            side = _side_aliases.get(side_raw, side_raw)
+            entry_price = _parse_float(row.get("entry_price", "")) or 0.0
+            exit_price  = _parse_float(row.get("exit_price",  "")) or 0.0
+            quantity    = _parse_float(row.get("quantity", ""))
+            pnl         = _parse_float(row.get("pnl", ""))
+            open_time   = _parse_dt(row.get("open_time",  ""))
+            close_time  = _parse_dt(row.get("close_time", ""))
 
-            # entry/exit price optional — default to 0 if not in export
-            entry_price = entry_price or 0.0
-            exit_price  = exit_price  or 0.0
-
-            missing = [f for f, v in [
-                ("symbol", symbol), ("side", side),
-                ("quantity", quantity), ("pnl", pnl),
-                ("open_time", open_time), ("close_time", close_time),
-            ] if not v and v != 0]
+            # Validate required fields
+            missing = []
+            if not symbol:
+                missing.append("symbol")
+            if not side:
+                missing.append("side")
+            if quantity is None:
+                missing.append("quantity")
+            if pnl is None:
+                missing.append("pnl")
+            if open_time is None:
+                missing.append("open_time")
+            if close_time is None:
+                missing.append("close_time")
             if missing:
-                errors.append(f"Row {i}: missing {', '.join(missing)}")
+                errors.append(f"Row {i}: missing or unparseable — {', '.join(missing)}")
                 continue
 
             if close_time <= open_time:
-                errors.append(f"Row {i}: close_time must be after open_time")
+                errors.append(f"Row {i}: close_time must be after open_time ({open_time} → {close_time})")
+                continue
+
+            # Duplicate detection: same user + symbol + open_time + close_time + pnl
+            duplicate = db.query(Trade).filter(
+                or_(Trade.user_id == current_user.id, Trade.user_id == None),
+                Trade.symbol == symbol,
+                Trade.open_time == open_time,
+                Trade.close_time == close_time,
+                Trade.pnl == pnl,
+            ).first()
+            if duplicate:
+                skipped += 1
+                errors.append(f"Row {i}: duplicate — trade already exists (id={duplicate.id})")
                 continue
 
             trade = Trade(
@@ -525,13 +552,16 @@ async def import_trades(
                 duration_minutes=compute_duration(open_time, close_time),
                 user_id=current_user.id,
             )
+            # Commit each row independently so one failure never blocks others
             db.add(trade)
+            db.commit()
+            db.refresh(trade)
             imported += 1
         except Exception as exc:
+            db.rollback()
             errors.append(f"Row {i}: {exc}")
 
-    db.commit()
-    return {"imported": imported, "errors": errors}
+    return {"imported": imported, "skipped": skipped, "errors": errors}
 
 
 # ---------------------------------------------------------------------------
