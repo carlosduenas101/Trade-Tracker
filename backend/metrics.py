@@ -112,6 +112,18 @@ def calculate_avg_entries(trades: list[TradeItem]) -> float:
     return round(sum(values) / len(values), 2)
 
 
+def calculate_avg_pnl(trades: list[TradeItem]) -> float:
+    """
+    Calculate the average PnL per trade.
+
+    Returns 0.0 when the trade list is empty.
+    """
+    if not trades:
+        return 0.0
+    total = sum(_get(t, "pnl", 0.0) or 0.0 for t in trades)
+    return round(total / len(trades), 8)
+
+
 def calculate_avg_roe(trades: list[TradeItem]) -> float:
     """
     Calculate the average ROE % across all trades that have a roe value.
@@ -201,6 +213,7 @@ def get_all_metrics(trades: list[TradeItem]) -> dict:
     return {
         "win_rate": calculate_win_rate(trades),
         "total_pnl": calculate_total_pnl(trades),
+        "avg_pnl": calculate_avg_pnl(trades),
         "max_drawdown": calculate_max_drawdown(trades),
         "avg_rr": calculate_avg_rr(trades),
         "avg_roe": calculate_avg_roe(trades),

@@ -35,6 +35,7 @@ const TRANSLATIONS = {
     'metric.avgroe':            'Avg ROE %',
     'metric.avgentries':        'Avg Entries',
     'metric.avgduration':       'Avg Duration',
+    'metric.avgpnl':            'Avg P&L',
     /* Metric sub-texts */
     'metric.realized':          'Realized',
     'metric.peaktotrough':      'Peak to trough',
@@ -173,6 +174,7 @@ const TRANSLATIONS = {
     'metric.avgroe':            'ROE % Promedio',
     'metric.avgentries':        'Entradas prom.',
     'metric.avgduration':       'Duración prom.',
+    'metric.avgpnl':            'P&L Promedio',
     /* Metric sub-texts */
     'metric.realized':          'Realizado',
     'metric.peaktotrough':      'Pico a valle',
@@ -311,6 +313,7 @@ const TRANSLATIONS = {
     'metric.avgroe':            'ROE % Moyen',
     'metric.avgentries':        'Entrées moy.',
     'metric.avgduration':       'Durée moy.',
+    'metric.avgpnl':            'P&L Moyen',
     /* Metric sub-texts */
     'metric.realized':          'Réalisé',
     'metric.peaktotrough':      'Sommet à creux',
