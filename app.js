@@ -1075,10 +1075,17 @@ async function importCSV(file) {
       throw new Error(`Server error ${res.status}: ${text}`);
     }
     const result = await res.json();
-    const msg = `${t('toast.import.ok')} ${result.imported} trade(s).` +
-      (result.errors.length ? ` ${result.errors.length} ${t('toast.import.skipped')}` : '');
-    showToast(msg, result.errors.length ? 'info' : 'success', 6000);
-    if (result.errors.length) console.warn('Import row errors:', result.errors);
+    const hasErrors = result.errors && result.errors.length > 0;
+    let msg = `${t('toast.import.ok')} ${result.imported} trade(s).`;
+    if (result.skipped) msg += ` ${result.skipped} duplicate(s) skipped.`;
+    if (hasErrors) msg += ` ${result.errors.length} row(s) failed.`;
+    showToast(msg, hasErrors ? 'info' : 'success', 8000);
+    if (hasErrors) {
+      console.warn('Import row errors:\n' + result.errors.join('\n'));
+      // Show first 3 errors in a second toast so user sees what went wrong
+      const preview = result.errors.slice(0, 3).join('\n') + (result.errors.length > 3 ? `\n…and ${result.errors.length - 3} more` : '');
+      showToast(preview, 'error', 12000);
+    }
     await refreshAll();
   } catch (err) {
     showToast(`${t('toast.import.fail')} ${err.message}`, 'error', 8000);
