@@ -425,6 +425,8 @@ const dom = {
   metricAvgEntriesSub:  $('metricAvgEntriesSub'),
   metricAvgDuration:    $('metricAvgDuration'),
   metricAvgDurationSub: $('metricAvgDurationSub'),
+  metricAvgPnl:         $('metricAvgPnl'),
+  metricAvgPnlSub:      $('metricAvgPnlSub'),
 
   cardWinRate:    $('card-winRate'),
   cardPnl:        $('card-pnl'),
@@ -435,6 +437,7 @@ const dom = {
   cardAvgRoe:     $('card-avgRoe'),
   cardAvgEntries:  $('card-avgEntries'),
   cardAvgDuration: $('card-avgDuration'),
+  cardAvgPnl:      $('card-avgPnl'),
 
   // Table
   tradesBody:   $('tradesBody'),
@@ -751,6 +754,15 @@ function renderMetrics(data) {
   dom.metricAvgDuration.textContent = avg_duration != null && avg_duration > 0 ? formatDuration(avg_duration) : '—';
   dom.metricAvgDuration.classList.remove('skeleton');
   dom.metricAvgDurationSub.textContent = t('metric.pertrade');
+
+  // Avg P&L — use backend value if available, otherwise derive from total_pnl / total_trades
+  const avg_pnl = data.avg_pnl != null
+    ? data.avg_pnl
+    : (total_trades > 0 ? total_pnl / total_trades : null);
+  dom.metricAvgPnl.textContent = avg_pnl != null ? formatCurrency(avg_pnl) : '—';
+  dom.metricAvgPnl.classList.remove('skeleton');
+  dom.metricAvgPnlSub.textContent = t('metric.pertrade');
+  applyCardColor(dom.cardAvgPnl, avg_pnl > 0 ? 'positive' : avg_pnl < 0 ? 'negative' : '');
 }
 
 function applyCardColor(cardEl, type) {
@@ -886,26 +898,20 @@ function parseCoin(symbol) {
  * Short positions: qty is already in coin units
  */
 function updateQtyConversion() {
-  const side  = dom.fSide.value;
   const entry = parseFloat(dom.fEntry.value);
   const qty   = parseFloat(dom.fQty.value);
   const coin  = parseCoin(dom.fSymbol.value);
 
-  if (side === 'long') {
-    dom.qtyUnit.textContent = 'USDT';
-    dom.qtyUnit.style.display = '';
-    if (!isNaN(entry) && entry > 0 && !isNaN(qty) && qty > 0) {
-      const coinAmt = qty / entry;
-      const decimals = coinAmt < 0.001 ? 8 : coinAmt < 1 ? 6 : 4;
-      dom.qtyConverted.textContent = coinAmt.toFixed(decimals) + ' ' + coin;
-      dom.qtyConversion.style.display = '';
-    } else {
-      dom.qtyConversion.style.display = 'none';
-    }
+  // Quantity is always entered in USDT regardless of side
+  dom.qtyUnit.textContent = 'USDT';
+  dom.qtyUnit.style.display = '';
+
+  if (!isNaN(entry) && entry > 0 && !isNaN(qty) && qty > 0) {
+    const coinAmt = qty / entry;
+    const decimals = coinAmt < 0.001 ? 8 : coinAmt < 1 ? 6 : 4;
+    dom.qtyConverted.textContent = coinAmt.toFixed(decimals) + ' ' + coin;
+    dom.qtyConversion.style.display = '';
   } else {
-    // Short or unselected — qty is in coin units, no conversion needed
-    dom.qtyUnit.textContent = coin !== 'COIN' ? coin : '';
-    dom.qtyUnit.style.display = coin !== 'COIN' ? '' : 'none';
     dom.qtyConversion.style.display = 'none';
   }
 }
@@ -1323,7 +1329,7 @@ function handleFormSubmit(e) {
   const entryRaw    = parseFloat(dom.fEntry.value);
   const exitRaw     = parseFloat(dom.fExit.value);
   const qtyUsdt     = parseFloat(dom.fQty.value);
-  const qtyRaw      = (side === 'long' && !isNaN(entryRaw) && entryRaw > 0)
+  const qtyRaw      = (!isNaN(entryRaw) && entryRaw > 0)
     ? qtyUsdt / entryRaw
     : qtyUsdt;
   const pnlRaw      = parseFloat(dom.fPnl.value);
