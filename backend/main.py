@@ -423,18 +423,27 @@ def _parse_float(val: str):
 
 
 def _parse_int(val: str):
-    try:
-        return int(val) if val else None
-    except ValueError:
+    if not val:
         return None
+    try:
+        return int(val)
+    except ValueError:
+        try:
+            return int(float(val))  # handles "1.0", "2.0", etc.
+        except (ValueError, TypeError):
+            return None
 
 
 _DT_FORMATS = [
     "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
     "%Y-%m-%dT%H:%M",    "%Y-%m-%d %H:%M",
-    "%Y-%m-%d",          "%m/%d/%Y %H:%M:%S",
-    "%m/%d/%Y %H:%M",    "%m/%d/%Y",
-    "%d/%m/%Y %H:%M:%S", "%d/%m/%Y",
+    "%Y-%m-%d",
+    "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y",
+    "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y",
+    # Excel AM/PM formats
+    "%m/%d/%Y %I:%M:%S %p", "%m/%d/%Y %I:%M %p",
+    "%d/%m/%Y %I:%M:%S %p", "%d/%m/%Y %I:%M %p",
+    "%Y-%m-%d %I:%M:%S %p", "%Y-%m-%d %I:%M %p",
 ]
 
 def _parse_dt(val: str):
@@ -498,26 +507,26 @@ async def import_trades(
             open_time   = _parse_dt(row.get("open_time",  ""))
             close_time  = _parse_dt(row.get("close_time", ""))
 
-            # Validate required fields
+            # Validate required fields — include raw value so user knows what failed
             missing = []
             if not symbol:
-                missing.append("symbol")
+                missing.append(f"symbol={repr(row.get('symbol', ''))}")
             if not side:
-                missing.append("side")
+                missing.append(f"side={repr(row.get('side', ''))}")
             if quantity is None:
-                missing.append("quantity")
+                missing.append(f"quantity={repr(row.get('quantity', ''))}")
             if pnl is None:
-                missing.append("pnl")
+                missing.append(f"pnl={repr(row.get('pnl', ''))}")
             if open_time is None:
-                missing.append("open_time")
+                missing.append(f"open_time={repr(row.get('open_time', ''))}")
             if close_time is None:
-                missing.append("close_time")
+                missing.append(f"close_time={repr(row.get('close_time', ''))}")
             if missing:
-                errors.append(f"Row {i}: missing or unparseable — {', '.join(missing)}")
+                errors.append(f"Row {i}: missing/unparseable — {'; '.join(missing)}")
                 continue
 
             if close_time <= open_time:
-                errors.append(f"Row {i}: close_time must be after open_time ({open_time} → {close_time})")
+                errors.append(f"Row {i}: close_time ({close_time}) must be after open_time ({open_time})")
                 continue
 
             # Duplicate detection: same user + symbol + open_time + close_time + pnl
