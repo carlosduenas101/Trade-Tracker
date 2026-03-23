@@ -535,6 +535,60 @@ async def import_trades(
 
 
 # ---------------------------------------------------------------------------
+# GET /export  — download user's trades as CSV (same format as template)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/export", tags=["Trades"])
+def export_trades(
+    start_date: Optional[datetime] = Query(None, example="2024-01-01T00:00:00"),
+    end_date:   Optional[datetime] = Query(None, example="2024-12-31T23:59:59"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export the authenticated user's trades as a CSV file (template-compatible format)."""
+    query = db.query(Trade).filter(
+        or_(Trade.user_id == current_user.id, Trade.user_id == None)
+    ).order_by(Trade.close_time.asc())
+    query = _apply_date_filters(query, start_date, end_date)
+    trades = query.all()
+
+    def _fmt(val):
+        if val is None:
+            return ""
+        if isinstance(val, datetime):
+            return val.strftime("%Y-%m-%dT%H:%M:%S")
+        return str(val)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(_CSV_COLUMNS)
+    for t in trades:
+        writer.writerow([
+            _fmt(t.symbol),
+            _fmt(t.side),
+            _fmt(t.entry_price),
+            _fmt(t.exit_price),
+            _fmt(t.quantity),
+            _fmt(t.pnl),
+            _fmt(t.roe),
+            _fmt(t.leverage),
+            _fmt(t.risk_reward),
+            _fmt(t.entries),
+            _fmt(t.open_time),
+            _fmt(t.close_time),
+            _fmt(t.notes),
+        ])
+    output.seek(0)
+    filename = f"trades_export_{datetime.utcnow().strftime('%Y-%m-%d')}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ---------------------------------------------------------------------------
 # GET /metrics
 # ---------------------------------------------------------------------------
 

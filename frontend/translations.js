@@ -23,6 +23,8 @@ const TRANSLATIONS = {
     'toolbar.apply':            'Apply',
     'toolbar.clear':            'Clear',
     'toolbar.import':           '↑ Import CSV',
+    'toolbar.export':           '↓ Export CSV',
+    'toolbar.exporting':        'Exporting…',
     'toolbar.template':         '↓ Template',
     'toolbar.addtrade':         '+ Add Trade',
     /* Metrics labels */
@@ -140,6 +142,7 @@ const TRANSLATIONS = {
     'toast.import.ok':          'Imported',
     'toast.import.skipped':     'row(s) skipped — see console.',
     'toast.import.fail':        'Import failed:',
+    'toast.export.fail':        'Export failed:',
     'toast.session.expired':    'Session expired — please sign in again.',
   },
 
@@ -162,6 +165,8 @@ const TRANSLATIONS = {
     'toolbar.apply':            'Aplicar',
     'toolbar.clear':            'Limpiar',
     'toolbar.import':           '↑ Importar CSV',
+    'toolbar.export':           '↓ Exportar CSV',
+    'toolbar.exporting':        'Exportando…',
     'toolbar.template':         '↓ Plantilla',
     'toolbar.addtrade':         '+ Agregar trade',
     /* Metrics labels */
@@ -279,6 +284,7 @@ const TRANSLATIONS = {
     'toast.import.ok':          'Importados',
     'toast.import.skipped':     'fila(s) omitida(s) — ver consola.',
     'toast.import.fail':        'Error al importar:',
+    'toast.export.fail':        'Error al exportar:',
     'toast.session.expired':    'Sesión expirada — inicia sesión de nuevo.',
   },
 
@@ -301,6 +307,8 @@ const TRANSLATIONS = {
     'toolbar.apply':            'Appliquer',
     'toolbar.clear':            'Effacer',
     'toolbar.import':           '↑ Importer CSV',
+    'toolbar.export':           '↓ Exporter CSV',
+    'toolbar.exporting':        'Export en cours…',
     'toolbar.template':         '↓ Modèle',
     'toolbar.addtrade':         '+ Ajouter un trade',
     /* Metrics labels */
@@ -418,6 +426,7 @@ const TRANSLATIONS = {
     'toast.import.ok':          'Importés',
     'toast.import.skipped':     'ligne(s) ignorée(s) — voir console.',
     'toast.import.fail':        "Échec de l'importation :",
+    'toast.export.fail':        "Échec de l'exportation :",
     'toast.session.expired':    'Session expirée — veuillez vous reconnecter.',
   },
 };
