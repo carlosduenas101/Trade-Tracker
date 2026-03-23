@@ -219,10 +219,18 @@ def _apply_date_filters(
     start_date: Optional[datetime],
     end_date: Optional[datetime],
 ):
-    """Apply optional date range filters to a SQLAlchemy query on Trade."""
+    """Apply optional date range filters to a SQLAlchemy query on Trade.
+
+    When end_date arrives with no time component (i.e. parsed from a plain
+    date string like '2026-03-23') it lands at 00:00:00, which would silently
+    exclude every trade that closed later that same day.  We expand it to
+    end-of-day so the full calendar day is always included.
+    """
     if start_date:
         query = query.filter(Trade.close_time >= start_date)
     if end_date:
+        if end_date.hour == 0 and end_date.minute == 0 and end_date.second == 0:
+            end_date = end_date.replace(hour=23, minute=59, second=59)
         query = query.filter(Trade.close_time <= end_date)
     return query
 
