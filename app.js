@@ -511,8 +511,9 @@ const dom = {
   confirmCancelBtn: $('confirmCancelBtn'),
   confirmDeleteBtn: $('confirmDeleteBtn'),
 
-  // Import
+  // Import / Export
   importBtn:    $('importBtn'),
+  exportBtn:    $('exportBtn'),
   templateBtn:  $('templateBtn'),
   csvFileInput: $('csvFileInput'),
 
@@ -665,7 +666,7 @@ function showToast(msg, type = 'info', duration = 3500) {
  */
 async function fetchMetrics(startDate, endDate) {
   // Skeleton loading
-  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration];
+  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration, dom.metricAvgPnl];
   cards.forEach(el => { el.textContent = '···'; el.classList.add('skeleton'); });
 
   try {
@@ -1680,6 +1681,31 @@ function bindEvents() {
   dom.csvFileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) importCSV(file);
+  });
+
+  // CSV Export
+  dom.exportBtn.addEventListener('click', async () => {
+    dom.exportBtn.disabled = true;
+    dom.exportBtn.textContent = t('toolbar.exporting');
+    try {
+      const qs = buildQuery({ start_date: dom.startDate.value || null, end_date: dom.endDate.value || null });
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/export${qs}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `trades_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      showToast(`${t('toast.export.fail')} ${err.message}`, 'error', 6000);
+    } finally {
+      dom.exportBtn.disabled = false;
+      dom.exportBtn.textContent = t('toolbar.export');
+    }
   });
 
   // Template download — generated client-side, no backend needed
