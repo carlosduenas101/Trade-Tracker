@@ -31,6 +31,7 @@ const TRANSLATIONS = {
     'metric.winrate':           'Win Rate',
     'metric.pnl':               'Total P&L',
     'metric.drawdown':          'Max Drawdown',
+    'metric.maxprofit':         'Max Profit',
     'metric.rr':                'Avg R:R',
     'metric.streak':            'Current Streak',
     'metric.total':             'Total Trades',
@@ -41,6 +42,7 @@ const TRANSLATIONS = {
     /* Metric sub-texts */
     'metric.realized':          'Realized',
     'metric.peaktotrough':      'Peak to trough',
+    'metric.besttrade':         'Best trade',
     'metric.favorable':         'Favorable',
     'metric.unfavorable':       'Unfavorable',
     'metric.winstreak':         'Win streak',
@@ -173,6 +175,7 @@ const TRANSLATIONS = {
     'metric.winrate':           'Tasa de éxito',
     'metric.pnl':               'P&L Total',
     'metric.drawdown':          'Máx. Drawdown',
+    'metric.maxprofit':         'Máx. Ganancia',
     'metric.rr':                'R:R Promedio',
     'metric.streak':            'Racha actual',
     'metric.total':             'Total de trades',
@@ -183,6 +186,7 @@ const TRANSLATIONS = {
     /* Metric sub-texts */
     'metric.realized':          'Realizado',
     'metric.peaktotrough':      'Pico a valle',
+    'metric.besttrade':         'Mejor trade',
     'metric.favorable':         'Favorable',
     'metric.unfavorable':       'Desfavorable',
     'metric.winstreak':         'Racha ganadora',
@@ -315,6 +319,7 @@ const TRANSLATIONS = {
     'metric.winrate':           'Taux de réussite',
     'metric.pnl':               'P&L Total',
     'metric.drawdown':          'Drawdown Max',
+    'metric.maxprofit':         'Profit Max',
     'metric.rr':                'R:R Moyen',
     'metric.streak':            'Série actuelle',
     'metric.total':             'Total des trades',
@@ -325,6 +330,7 @@ const TRANSLATIONS = {
     /* Metric sub-texts */
     'metric.realized':          'Réalisé',
     'metric.peaktotrough':      'Sommet à creux',
+    'metric.besttrade':         'Meilleur trade',
     'metric.favorable':         'Favorable',
     'metric.unfavorable':       'Défavorable',
     'metric.winstreak':         'Série gagnante',
