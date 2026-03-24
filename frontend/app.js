@@ -413,6 +413,8 @@ const dom = {
   metricPnlSub:         $('metricPnlSub'),
   metricDrawdown:       $('metricDrawdown'),
   metricDrawdownSub:    $('metricDrawdownSub'),
+  metricMaxProfit:      $('metricMaxProfit'),
+  metricMaxProfitSub:   $('metricMaxProfitSub'),
   metricRR:             $('metricRR'),
   metricRRSub:          $('metricRRSub'),
   metricStreak:         $('metricStreak'),
@@ -431,6 +433,7 @@ const dom = {
   cardWinRate:    $('card-winRate'),
   cardPnl:        $('card-pnl'),
   cardDrawdown:   $('card-drawdown'),
+  cardMaxProfit:  $('card-maxProfit'),
   cardRR:         $('card-rr'),
   cardStreak:     $('card-streak'),
   cardTotal:      $('card-total'),
@@ -666,7 +669,7 @@ function showToast(msg, type = 'info', duration = 3500) {
  */
 async function fetchMetrics(startDate, endDate) {
   // Skeleton loading
-  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration, dom.metricAvgPnl];
+  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricMaxProfit, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration, dom.metricAvgPnl];
   cards.forEach(el => { el.textContent = '···'; el.classList.add('skeleton'); });
 
   try {
@@ -715,6 +718,17 @@ function renderMetrics(data) {
   dom.metricDrawdown.classList.remove('skeleton');
   dom.metricDrawdownSub.textContent = t('metric.peaktotrough');
   applyCardColor(dom.cardDrawdown, 'negative');
+
+  // Max Profit — use backend value if available, otherwise derive from state.trades
+  const max_profit = data.max_profit != null
+    ? data.max_profit
+    : (state.trades && state.trades.length
+        ? Math.max(...state.trades.map(t => t.pnl ?? 0))
+        : null);
+  dom.metricMaxProfit.textContent = max_profit != null ? formatCurrency(max_profit) : '—';
+  dom.metricMaxProfit.classList.remove('skeleton');
+  dom.metricMaxProfitSub.textContent = t('metric.besttrade');
+  applyCardColor(dom.cardMaxProfit, max_profit > 0 ? 'positive' : max_profit < 0 ? 'negative' : '');
 
   // Avg R:R
   dom.metricRR.textContent = avg_rr != null ? formatRR(avg_rr) : '—';
