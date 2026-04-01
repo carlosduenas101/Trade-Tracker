@@ -1180,10 +1180,8 @@ function renderChart(trades) {
   // Theme-aware chart colours
   const _chartTheme = document.documentElement.getAttribute('data-theme');
   const _chartColors = _chartTheme === 'purple'
-    ? { win: '#00e5ff', winRgb: '0, 229, 255',   loss: '#e040fb', lossRgb: '224, 64, 251' }
-    : _chartTheme === 'blossom'
-      ? { win: '#9b5de5', winRgb: '155, 93, 229', loss: '#ff85a1', lossRgb: '255, 133, 161' }
-      : { win: '#00c853', winRgb: '0, 200, 83',   loss: '#ff1744', lossRgb: '255, 23, 68'  };
+    ? { win: '#00e5ff', winRgb: '0, 229, 255', loss: '#e040fb', lossRgb: '224, 64, 251' }
+    : { win: '#00c853', winRgb: '0, 200, 83',  loss: '#ff1744', lossRgb: '255, 23, 68'  };
 
   // Sort by close_time asc, build cumulative P&L
   const sorted = [...trades]
