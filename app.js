@@ -717,8 +717,13 @@ function renderMetrics(data) {
   dom.metricPnlSub.textContent = t('metric.realized');
   applyCardColor(dom.cardPnl, total_pnl > 0 ? 'positive' : total_pnl < 0 ? 'negative' : '');
 
-  // Total Losses
-  dom.metricTotalLosses.textContent = total_losses != null ? formatCurrency(total_losses) : '—';
+  // Total Losses — use backend value if available, otherwise sum losing trades from state
+  const total_losses_val = total_losses != null
+    ? total_losses
+    : (state.trades && state.trades.length
+        ? state.trades.reduce((sum, tr) => { const p = tr.pnl ?? 0; return p < 0 ? sum + p : sum; }, 0)
+        : null);
+  dom.metricTotalLosses.textContent = total_losses_val != null ? formatCurrency(total_losses_val) : '—';
   dom.metricTotalLosses.classList.remove('skeleton');
   dom.metricTotalLossesSub.textContent = `${losing_trades ?? 0} ${t('metric.losingtrades')}`;
   applyCardColor(dom.cardTotalLosses, 'negative');
