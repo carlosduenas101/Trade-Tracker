@@ -60,6 +60,13 @@ def calculate_max_profit(trades: list[TradeItem]) -> float:
     return round(max(values), 8)
 
 
+def calculate_total_losses(trades: list[TradeItem]) -> float:
+    """Return the sum of PnL for all losing trades (negative value). Returns 0.0 when empty."""
+    if not trades:
+        return 0.0
+    return round(sum(_get(t, "pnl", 0.0) or 0.0 for t in trades if (_get(t, "pnl", 0.0) or 0.0) < 0), 8)
+
+
 def calculate_max_drawdown(trades: list[TradeItem]) -> float:
     """
     Calculate maximum drawdown from peak equity.
@@ -233,4 +240,5 @@ def get_all_metrics(trades: list[TradeItem]) -> dict:
         "total_trades": len(trades),
         "winning_trades": wins,
         "losing_trades": len(trades) - wins,
+        "total_losses": calculate_total_losses(trades),
     }

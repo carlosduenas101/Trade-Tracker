@@ -411,6 +411,8 @@ const dom = {
   metricWinRateSub:     $('metricWinRateSub'),
   metricPnl:            $('metricPnl'),
   metricPnlSub:         $('metricPnlSub'),
+  metricTotalLosses:    $('metricTotalLosses'),
+  metricTotalLossesSub: $('metricTotalLossesSub'),
   metricDrawdown:       $('metricDrawdown'),
   metricDrawdownSub:    $('metricDrawdownSub'),
   metricMaxProfit:      $('metricMaxProfit'),
@@ -431,8 +433,9 @@ const dom = {
   metricAvgPnlSub:      $('metricAvgPnlSub'),
 
   cardWinRate:    $('card-winRate'),
-  cardPnl:        $('card-pnl'),
-  cardDrawdown:   $('card-drawdown'),
+  cardPnl:          $('card-pnl'),
+  cardTotalLosses:  $('card-totalLosses'),
+  cardDrawdown:     $('card-drawdown'),
   cardMaxProfit:  $('card-maxProfit'),
   cardRR:         $('card-rr'),
   cardStreak:     $('card-streak'),
@@ -669,7 +672,7 @@ function showToast(msg, type = 'info', duration = 3500) {
  */
 async function fetchMetrics(startDate, endDate) {
   // Skeleton loading
-  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricDrawdown, dom.metricMaxProfit, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration, dom.metricAvgPnl];
+  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricTotalLosses, dom.metricDrawdown, dom.metricMaxProfit, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration, dom.metricAvgPnl];
   cards.forEach(el => { el.textContent = '···'; el.classList.add('skeleton'); });
 
   try {
@@ -692,6 +695,7 @@ function renderMetrics(data) {
   const {
     win_rate,
     total_pnl,
+    total_losses,
     max_drawdown,
     avg_rr,
     current_streak,
@@ -713,8 +717,14 @@ function renderMetrics(data) {
   dom.metricPnlSub.textContent = t('metric.realized');
   applyCardColor(dom.cardPnl, total_pnl > 0 ? 'positive' : total_pnl < 0 ? 'negative' : '');
 
+  // Total Losses
+  dom.metricTotalLosses.textContent = total_losses != null ? formatCurrency(total_losses) : '—';
+  dom.metricTotalLosses.classList.remove('skeleton');
+  dom.metricTotalLossesSub.textContent = `${losing_trades ?? 0} ${t('metric.losingtrades')}`;
+  applyCardColor(dom.cardTotalLosses, 'negative');
+
   // Max Drawdown
-  dom.metricDrawdown.textContent = max_drawdown != null ? formatCurrency(max_drawdown) : '—';
+  dom.metricDrawdown.textContent = max_drawdown != null ? formatCurrency(max_drawdown > 0 ? -max_drawdown : max_drawdown) : '—';
   dom.metricDrawdown.classList.remove('skeleton');
   dom.metricDrawdownSub.textContent = t('metric.peaktotrough');
   applyCardColor(dom.cardDrawdown, 'negative');
