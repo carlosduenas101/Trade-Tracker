@@ -30,6 +30,8 @@ const TRANSLATIONS = {
     /* Metrics labels */
     'metric.winrate':           'Win Rate',
     'metric.pnl':               'Total P&L',
+    'metric.totallosses':       'Total Losses',
+    'metric.losingtrades':      'losing trades',
     'metric.drawdown':          'Max Drawdown',
     'metric.maxprofit':         'Max Profit',
     'metric.rr':                'Avg R:R',
@@ -174,6 +176,8 @@ const TRANSLATIONS = {
     /* Metrics labels */
     'metric.winrate':           'Tasa de éxito',
     'metric.pnl':               'P&L Total',
+    'metric.totallosses':       'Pérdidas Totales',
+    'metric.losingtrades':      'trades perdedores',
     'metric.drawdown':          'Máx. Drawdown',
     'metric.maxprofit':         'Máx. Ganancia',
     'metric.rr':                'R:R Promedio',
@@ -318,6 +322,8 @@ const TRANSLATIONS = {
     /* Metrics labels */
     'metric.winrate':           'Taux de réussite',
     'metric.pnl':               'P&L Total',
+    'metric.totallosses':       'Pertes Totales',
+    'metric.losingtrades':      'trades perdants',
     'metric.drawdown':          'Drawdown Max',
     'metric.maxprofit':         'Profit Max',
     'metric.rr':                'R:R Moyen',
