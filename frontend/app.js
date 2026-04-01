@@ -1177,6 +1177,14 @@ function renderChart(trades) {
   dom.chartEmpty.style.display = 'none';
   canvas.style.display = 'block';
 
+  // Theme-aware chart colours
+  const _chartTheme = document.documentElement.getAttribute('data-theme');
+  const _chartColors = _chartTheme === 'purple'
+    ? { win: '#00e5ff', winRgb: '0, 229, 255',   loss: '#e040fb', lossRgb: '224, 64, 251' }
+    : _chartTheme === 'blossom'
+      ? { win: '#9b5de5', winRgb: '155, 93, 229', loss: '#ff85a1', lossRgb: '255, 133, 161' }
+      : { win: '#00c853', winRgb: '0, 200, 83',   loss: '#ff1744', lossRgb: '255, 23, 68'  };
+
   // Sort by close_time asc, build cumulative P&L
   const sorted = [...trades]
     .filter(t => t.close_time || t.open_time)
@@ -1194,19 +1202,19 @@ function renderChart(trades) {
     const d = new Date(dateStr);
     labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
     values.push(parseFloat(cumulative.toFixed(2)));
-    pointColors.push(pnl >= 0 ? '#00c853' : '#ff1744');
+    pointColors.push(pnl >= 0 ? _chartColors.win : _chartColors.loss);
   }
 
   // Gradient fill
   const ctx = canvas.getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, 0, 260);
   const finalValue = values[values.length - 1] ?? 0;
-  const baseColor = finalValue >= 0 ? '0, 200, 83' : '255, 23, 68';
+  const baseColor = finalValue >= 0 ? _chartColors.winRgb : _chartColors.lossRgb;
   gradient.addColorStop(0,   `rgba(${baseColor}, 0.25)`);
   gradient.addColorStop(0.6, `rgba(${baseColor}, 0.05)`);
   gradient.addColorStop(1,   `rgba(${baseColor}, 0.00)`);
 
-  const lineColor = finalValue >= 0 ? '#00c853' : '#ff1744';
+  const lineColor = finalValue >= 0 ? _chartColors.win : _chartColors.loss;
 
   state.pnlChart = new Chart(ctx, {
     type: 'line',
