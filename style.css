@@ -663,6 +663,72 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   white-space: nowrap;
 }
 
+.trades-table th.th-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.trades-table th.th-sortable:hover {
+  color: var(--text-primary);
+}
+
+/* Arrow container — stacked CSS triangles, no font dependency */
+.trades-table th .sort-arrow {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+  width: 10px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* CSS triangle — up */
+.trades-table th .sort-arrow .sa-up {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid var(--text-secondary);
+  opacity: 0.5;
+  transition: opacity 0.15s, border-bottom-color 0.15s;
+}
+
+/* CSS triangle — down */
+.trades-table th .sort-arrow .sa-down {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid var(--text-secondary);
+  opacity: 0.5;
+  transition: opacity 0.15s, border-top-color 0.15s;
+}
+
+/* Hover: both triangles brighten */
+.trades-table th.th-sortable:hover .sa-up  { opacity: 0.85; }
+.trades-table th.th-sortable:hover .sa-down { opacity: 0.85; }
+
+/* Active ascending: up triangle glows, down fades */
+.trades-table th.sort-active.sort-asc .sa-up {
+  border-bottom-color: var(--accent-primary);
+  opacity: 1;
+}
+.trades-table th.sort-active.sort-asc .sa-down { opacity: 0.2; }
+
+/* Active descending: down triangle glows, up fades */
+.trades-table th.sort-active.sort-desc .sa-down {
+  border-top-color: var(--accent-primary);
+  opacity: 1;
+}
+.trades-table th.sort-active.sort-desc .sa-up { opacity: 0.2; }
+
 /* Body rows */
 .trades-table tbody tr {
   border-bottom: 1px solid var(--border-subtle);
@@ -672,6 +738,19 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 .trades-table tbody tr:nth-child(even) { background: rgba(255,255,255,.02); }
 .trades-table tbody tr:hover { background: var(--bg-hover); }
 .trades-table tbody tr:last-child { border-bottom: none; }
+
+/* ── Trade row highlight (chart click) ──────────────────────── */
+@keyframes trade-pulse {
+  0%   { box-shadow: 0 0 0 2px var(--accent-primary), 0 0 10px var(--accent-primary); }
+  50%  { box-shadow: 0 0 0 3px var(--accent-primary), 0 0 22px var(--accent-primary); }
+  100% { box-shadow: 0 0 0 2px var(--accent-primary), 0 0 10px var(--accent-primary); }
+}
+.trades-table tbody tr.trade-highlight {
+  animation: trade-pulse 0.9s ease-in-out 4;
+  background: rgba(255,255,255,0.06) !important;
+  position: relative;
+  z-index: 1;
+}
 
 .trades-table td {
   padding: 10px 14px;
