@@ -391,6 +391,7 @@ const state = {
   pnlChart: null,
   selectedIds: new Set(),
   tableFilter: { symbols: new Set(), side: '' },
+  tableSort:   { col: 'date', dir: 'desc' },
 };
 
 /* ════════════════════════════════════════════════════════════
@@ -839,6 +840,50 @@ async function fetchTrades(startDate, endDate) {
  * Render trades array into the table body.
  * @param {Array} trades
  */
+function applySortIndicators() {
+  const { col, dir } = state.tableSort;
+  document.querySelectorAll('.trades-table th[data-sort]').forEach(th => {
+    const isActive = th.dataset.sort === col;
+    th.classList.toggle('sort-active', isActive);
+    th.classList.toggle('sort-asc',  isActive && dir === 'asc');
+    th.classList.toggle('sort-desc', isActive && dir === 'desc');
+
+    const arrow = th.querySelector('.sort-arrow');
+    if (!arrow) return;
+
+    if (isActive) {
+      const accentColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--accent-primary').trim() || '#39ff14';
+      arrow.textContent = dir === 'asc' ? ' ↑' : ' ↓';
+      arrow.style.cssText = `color:${accentColor};font-size:16px;font-weight:700;line-height:1;vertical-align:middle;`;
+    } else {
+      arrow.textContent = ' ↕';
+      arrow.style.cssText = 'color:#888;font-size:13px;font-weight:400;line-height:1;vertical-align:middle;';
+    }
+  });
+}
+
+function sortTrades(trades) {
+  const { col, dir } = state.tableSort;
+  if (!col) return trades;
+  return [...trades].sort((a, b) => {
+    let aVal, bVal;
+    if (col === 'date') {
+      aVal = new Date(a.close_time ?? a.open_time ?? 0).getTime();
+      bVal = new Date(b.close_time ?? b.open_time ?? 0).getTime();
+    } else if (col === 'pnl') {
+      aVal = parseFloat(a.pnl ?? a.profit_loss ?? 0);
+      bVal = parseFloat(b.pnl ?? b.profit_loss ?? 0);
+    } else if (col === 'roe') {
+      aVal = parseFloat(a.roe ?? 0);
+      bVal = parseFloat(b.roe ?? 0);
+    } else {
+      return 0;
+    }
+    return dir === 'asc' ? aVal - bVal : bVal - aVal;
+  });
+}
+
 function applyTableFilters(trades) {
   const { symbols, side } = state.tableFilter;
   return trades.filter(t => {
@@ -851,7 +896,8 @@ function applyTableFilters(trades) {
 function renderTradesTable(trades) {
   const filtered = applyTableFilters(trades);
   dom.tradeCount.textContent = `${filtered.length} trade${filtered.length !== 1 ? 's' : ''}${filtered.length !== trades.length ? ` (of ${trades.length})` : ''}`;
-  trades = filtered;
+  trades = sortTrades(filtered);
+  applySortIndicators();
 
   if (!trades.length) {
     dom.tradesBody.innerHTML = `
@@ -1228,14 +1274,24 @@ function renderChart(trades) {
         tension: 0.3,
         pointBackgroundColor: pointColors,
         pointBorderColor: 'transparent',
-        pointRadius: values.length > 60 ? 0 : 4,
-        pointHoverRadius: 6,
+        pointRadius: values.length > 100 ? 2 : 4,
+        pointHoverRadius: 7,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      onClick(evt, elements) {
+        if (!elements.length) return;
+        const trade = sorted[elements[0].index];
+        if (!trade) return;
+        const row = document.querySelector(`.trades-table tr[data-id="${trade.id}"]`);
+        if (!row) return;
+        document.querySelectorAll('.trades-table tr.trade-highlight').forEach(r => r.classList.remove('trade-highlight'));
+        row.classList.add('trade-highlight');
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -1802,6 +1858,20 @@ function bindEvents() {
   });
   dom.confirmBackdrop.addEventListener('click', (e) => {
     if (e.target === dom.confirmBackdrop) closeConfirmModal();
+  });
+
+  // Sort column headers
+  document.querySelectorAll('.trades-table th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (state.tableSort.col === col) {
+        state.tableSort.dir = state.tableSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.tableSort.col = col;
+        state.tableSort.dir = 'desc';
+      }
+      renderTradesTable(state.trades);
+    });
   });
 
   // Table delegation
