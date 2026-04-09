@@ -398,9 +398,13 @@ def download_template():
 
 _COL_ALIASES = {
     "entry": "entry_price", "exit": "exit_price",
-    "qty": "quantity", "rr": "risk_reward",
+    "qty": "quantity", "size": "quantity", "amount": "quantity",
+    "contracts": "quantity", "volume": "quantity",
+    "rr": "risk_reward",
     "open_date": "open_time", "close_date": "close_time",
-    "profit": "pnl", "profit_loss": "pnl",
+    "open": "open_time", "close": "close_time",
+    "profit": "pnl", "profit_loss": "pnl", "realized_pnl": "pnl",
+    "realized_profit": "pnl", "net_profit": "pnl",
 }
 
 
@@ -504,7 +508,7 @@ async def import_trades(
             side = _side_aliases.get(side_raw, side_raw)
             entry_price = _parse_float(row.get("entry_price", "")) or 0.0
             exit_price  = _parse_float(row.get("exit_price",  "")) or 0.0
-            quantity    = _parse_float(row.get("quantity", ""))
+            quantity    = _parse_float(row.get("quantity", "")) or 0.0
             pnl         = _parse_float(row.get("pnl", ""))
             open_time   = _parse_dt(row.get("open_time",  ""))
             close_time  = _parse_dt(row.get("close_time", ""))
@@ -515,8 +519,6 @@ async def import_trades(
                 missing.append(f"symbol={repr(row.get('symbol', ''))}")
             if not side:
                 missing.append(f"side={repr(row.get('side', ''))}")
-            if quantity is None:
-                missing.append(f"quantity={repr(row.get('quantity', ''))}")
             if pnl is None:
                 missing.append(f"pnl={repr(row.get('pnl', ''))}")
             if open_time is None:
