@@ -586,6 +586,146 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   box-shadow: var(--shadow-card);
 }
 
+/* ════════════════════════════════════════════════════════════
+   POOL FUND DASHBOARD
+   ════════════════════════════════════════════════════════════ */
+.pool-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-card);
+}
+
+.pool-rate-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-primary);
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+
+/* Add row */
+.pool-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.pool-input { flex: 1; min-width: 0; }
+.pool-input-amt { max-width: 160px; flex: none; }
+
+/* Summary cards */
+.pool-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) { .pool-summary { grid-template-columns: repeat(2, 1fr); } }
+
+.pool-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.pool-card-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.pool-card-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+.pool-card-accent { color: var(--accent-primary); }
+.pool-card-green  { color: var(--green); }
+
+/* Contributors table */
+.pool-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+.pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.pool-table thead tr {
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
+}
+.pool-table th {
+  padding: 9px 14px;
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.pool-table th:not(:first-child) { text-align: right; }
+.pool-table td {
+  padding: 10px 14px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+.pool-table td:not(:first-child) { text-align: right; font-family: var(--font-mono); }
+.pool-table tbody tr:last-child td { border-bottom: none; }
+.pool-table tbody tr:hover { background: var(--bg-hover); }
+
+.pool-name-cell { font-weight: 600; }
+.pool-return-cell { color: var(--accent-primary); }
+.pool-total-cell  { font-weight: 700; color: var(--green); }
+.pool-share-cell  { color: var(--text-secondary); }
+
+.pool-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.pool-bar {
+  width: 60px;
+  height: 4px;
+  background: var(--border-subtle);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.pool-bar-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.pool-del-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+  line-height: 1;
+}
+.pool-del-btn:hover { color: var(--red); }
+
 .chart-legend {
   display: flex;
   align-items: center;
