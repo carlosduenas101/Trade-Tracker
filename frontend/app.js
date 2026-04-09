@@ -1131,7 +1131,44 @@ async function deleteTrade(id) {
    CSV IMPORT
    ════════════════════════════════════════════════════════════ */
 
-async function importCSV(file) {
+/**
+ * Patch a CSV file so that any missing/empty "quantity" cell becomes "0".
+ * Handles tab, comma, semicolon, and pipe delimiters.
+ * Leaves the file unchanged if quantity is not a column (backend will default it).
+ */
+async function _patchCSVQuantity(file) {
+  const raw = await file.text();
+  const lines = raw.split(/\r?\n/);
+  if (lines.length < 2) return file;
+
+  // Detect delimiter
+  const delims = ['\t', ',', ';', '|'];
+  let delim = ',';
+  for (const d of delims) {
+    if (lines[0].includes(d)) { delim = d; break; }
+  }
+
+  const headers = lines[0].split(delim).map(h => h.replace(/^\uFEFF/, '').trim().toLowerCase());
+  const qtyIdx  = headers.findIndex(h => ['quantity','qty','size','amount','contracts','volume'].includes(h));
+  if (qtyIdx === -1) return file; // no qty column — backend will handle
+
+  let patched = false;
+  const out = lines.map((line, i) => {
+    if (i === 0 || !line.trim()) return line;
+    const cols = line.split(delim);
+    if (!cols[qtyIdx] || !cols[qtyIdx].trim()) {
+      cols[qtyIdx] = '0';
+      patched = true;
+    }
+    return cols.join(delim);
+  });
+
+  if (!patched) return file;
+  return new File([out.join('\n')], file.name, { type: 'text/csv' });
+}
+
+async function importCSV(rawFile) {
+  const file = await _patchCSVQuantity(rawFile);
   const formData = new FormData();
   formData.append('file', file);
 
