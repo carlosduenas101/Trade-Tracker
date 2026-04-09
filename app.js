@@ -1993,6 +1993,7 @@ document.addEventListener('DOMContentLoaded', init);
 
   // ── Calculate ──────────────────────────────────────────────
   $('fibCalcBtn').addEventListener('click', () => {
+    const pair      = $('fcPair').value;
     const account   = parseFloat($('fcAccount').value);
     const e1Price   = parseFloat($('fcE1').value);
     const numTrades = parseInt(document.querySelector('.fib-toggle[data-trades].active')?.dataset.trades || '1');
@@ -2042,6 +2043,7 @@ document.addEventListener('DOMContentLoaded', init);
     const fmt  = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
     const fmtP = (n, d = 5) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: d });
 
+    $('frPairBadge').textContent  = pair;
     $('frDeployed').textContent   = fmt(deployed);
     $('frTradeCap').textContent   = fmt(tradeCap) + (numTrades > 1 ? ` ×${numTrades}` : '');
     $('frReserve').textContent    = fmt(reserve);

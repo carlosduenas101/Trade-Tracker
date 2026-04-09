@@ -363,6 +363,61 @@
 
       <!-- Inputs -->
       <div class="fib-field">
+        <label class="fib-label">Currency Pair</label>
+        <select class="fib-input fib-select" id="fcPair">
+          <optgroup label="── Bitcoin">
+            <option value="BTC/USDT">BTC/USDT</option>
+            <option value="BTC/USDC">BTC/USDC</option>
+          </optgroup>
+          <optgroup label="── Ethereum">
+            <option value="ETH/USDT">ETH/USDT</option>
+            <option value="ETH/USDC">ETH/USDC</option>
+            <option value="ETH/BTC">ETH/BTC</option>
+          </optgroup>
+          <optgroup label="── Large Cap">
+            <option value="SOL/USDT">SOL/USDT</option>
+            <option value="BNB/USDT">BNB/USDT</option>
+            <option value="XRP/USDT">XRP/USDT</option>
+            <option value="ADA/USDT">ADA/USDT</option>
+            <option value="AVAX/USDT">AVAX/USDT</option>
+            <option value="DOGE/USDT">DOGE/USDT</option>
+            <option value="DOT/USDT">DOT/USDT</option>
+            <option value="LTC/USDT">LTC/USDT</option>
+            <option value="LINK/USDT">LINK/USDT</option>
+            <option value="BCH/USDT">BCH/USDT</option>
+          </optgroup>
+          <optgroup label="── Mid Cap">
+            <option value="SUI/USDT">SUI/USDT</option>
+            <option value="APT/USDT">APT/USDT</option>
+            <option value="ARB/USDT">ARB/USDT</option>
+            <option value="OP/USDT">OP/USDT</option>
+            <option value="INJ/USDT">INJ/USDT</option>
+            <option value="TIA/USDT">TIA/USDT</option>
+            <option value="MATIC/USDT">MATIC/USDT</option>
+            <option value="ATOM/USDT">ATOM/USDT</option>
+            <option value="NEAR/USDT">NEAR/USDT</option>
+            <option value="FTM/USDT">FTM/USDT</option>
+            <option value="SEI/USDT">SEI/USDT</option>
+            <option value="WIF/USDT">WIF/USDT</option>
+            <option value="PEPE/USDT">PEPE/USDT</option>
+          </optgroup>
+          <optgroup label="── Forex">
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="USD/CHF">USD/CHF</option>
+            <option value="AUD/USD">AUD/USD</option>
+            <option value="USD/CAD">USD/CAD</option>
+          </optgroup>
+          <optgroup label="── Commodities">
+            <option value="XAU/USD">XAU/USD (Gold)</option>
+            <option value="XAG/USD">XAG/USD (Silver)</option>
+            <option value="WTI/USD">WTI/USD (Oil)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="fib-field">
         <label class="fib-label">Account Size ($)</label>
         <input class="fib-input" type="number" id="fcAccount" placeholder="10,000" min="0" step="any" />
       </div>
@@ -392,6 +447,8 @@
 
       <!-- Results -->
       <div class="fib-results" id="fibResults" hidden>
+
+        <div class="fib-pair-badge" id="frPairBadge"></div>
 
         <!-- Account Summary -->
         <div class="fib-section-title">Account Overview</div>
