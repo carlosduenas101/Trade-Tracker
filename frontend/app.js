@@ -2145,93 +2145,141 @@ document.addEventListener('DOMContentLoaded', init);
   // ── State ──────────────────────────────────────────────────
   let contributors = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 
-  // ── 3D Pie Chart (Three.js) ────────────────────────────────
+  // ── Glassmorphic SVG Pie Chart ─────────────────────────────
+
   const PIE_COLORS = [
-    0x39ff14, 0x00cfff, 0xff6b35, 0xc77dff, 0xffd166,
-    0xef233c, 0x06d6a0, 0xff85a1, 0xf4a261, 0x457b9d,
+    { h: '#39ff14', r: 57,  g: 255, b: 20  },
+    { h: '#00cfff', r: 0,   g: 207, b: 255 },
+    { h: '#c77dff', r: 199, g: 125, b: 255 },
+    { h: '#ffd166', r: 255, g: 209, b: 102 },
+    { h: '#ff6b35', r: 255, g: 107, b: 53  },
+    { h: '#06d6a0', r: 6,   g: 214, b: 160 },
+    { h: '#ff85a1', r: 255, g: 133, b: 161 },
+    { h: '#ef233c', r: 239, g: 35,  b: 60  },
+    { h: '#f4a261', r: 244, g: 162, b: 97  },
+    { h: '#457b9d', r: 69,  g: 123, b: 157 },
   ];
 
-  let threeScene = null;
+  // SVG layout constants
+  const PIE_CX = 150, PIE_CY = 150, PIE_R = 116, PIE_INNER = 64, PIE_GAP = 1.8;
 
-  function initThree() {
-    const canvas = $id('poolPieCanvas');
-    const wrap   = canvas.parentElement;
-    const W = wrap.clientWidth  || 260;
-    const H = wrap.clientHeight || 180;
-
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(W, H);
-    renderer.setClearColor(0x000000, 0);
-
-    const scene  = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
-    camera.position.set(0, 2.8, 3.5);
-    camera.lookAt(0, 0, 0);
-
-    // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-    dir.position.set(3, 6, 4);
-    scene.add(dir);
-    const dir2 = new THREE.DirectionalLight(0xffffff, 0.3);
-    dir2.position.set(-3, -2, -4);
-    scene.add(dir2);
-
-    const group = new THREE.Group();
-    scene.add(group);
-
-    let animId = null;
-    function animate() {
-      animId = requestAnimationFrame(animate);
-      group.rotation.y += 0.008;
-      renderer.render(scene, camera);
-    }
-
-    threeScene = { renderer, scene, camera, group, animate, animId, canvas };
-    return threeScene;
+  function _pxy(r, deg) {
+    const rad = (deg - 90) * Math.PI / 180;
+    return [(PIE_CX + r * Math.cos(rad)).toFixed(3), (PIE_CY + r * Math.sin(rad)).toFixed(3)];
   }
 
-  function buildPieSlices(contributorsData) {
-    const total = contributorsData.reduce((s, c) => s + c.amount, 0);
-    if (!threeScene) return;
-    const { group } = threeScene;
-    // Remove old slices
-    while (group.children.length) group.remove(group.children[0]);
-    if (total === 0) return;
+  function _arc(startDeg, endDeg) {
+    const [ox1, oy1] = _pxy(PIE_R,     startDeg);
+    const [ox2, oy2] = _pxy(PIE_R,     endDeg);
+    const [ix1, iy1] = _pxy(PIE_INNER, startDeg);
+    const [ix2, iy2] = _pxy(PIE_INNER, endDeg);
+    const lg = (endDeg - startDeg) > 180 ? 1 : 0;
+    return `M${ox1},${oy1} A${PIE_R},${PIE_R},0,${lg},1,${ox2},${oy2} L${ix2},${iy2} A${PIE_INNER},${PIE_INNER},0,${lg},0,${ix1},${iy1}Z`;
+  }
 
-    const HEIGHT = 0.55;
-    const RADIUS = 1.5;
-    const GAP    = 0.012; // small angular gap between slices
-    const SEGS   = 64;
+  // Floating tooltip (shared, created once)
+  let _pieTip = null;
+  function _ensureTip() {
+    if (_pieTip) return;
+    _pieTip = document.createElement('div');
+    _pieTip.className = 'pie-tooltip';
+    document.body.appendChild(_pieTip);
+  }
+  function _showTip(name, amt, pct, color) {
+    _ensureTip();
+    _pieTip.innerHTML =
+      `<div class="pie-tip-name">${escHtml(name)}</div>` +
+      `<div class="pie-tip-amt">${amt}</div>` +
+      `<div class="pie-tip-pct" style="color:${color}">${pct}%</div>`;
+    _pieTip.style.display = 'block';
+  }
+  function _moveTip(e) {
+    if (!_pieTip) return;
+    _pieTip.style.left = (e.clientX + 18) + 'px';
+    _pieTip.style.top  = (e.clientY - 12) + 'px';
+  }
+  function _hideTip() { if (_pieTip) _pieTip.style.display = 'none'; }
 
+  function renderPieSVG() {
+    const container = $id('poolPieContainer');
+    const total = contributors.reduce((s, c) => s + c.amount, 0);
+    if (!contributors.length || !total) { container.innerHTML = ''; return; }
+
+    let defs = `
+      <filter id="pieShadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.45)"/>
+      </filter>`;
+    let slicesHTML = '';
     let angle = 0;
-    contributorsData.forEach((c, i) => {
-      const frac   = c.amount / total;
-      const theta  = frac * Math.PI * 2 - GAP;
-      if (theta <= 0) return;
 
-      const color = PIE_COLORS[i % PIE_COLORS.length];
-      const geo   = new THREE.CylinderGeometry(RADIUS, RADIUS, HEIGHT, SEGS, 1, false, angle + GAP / 2, theta);
-      const mat   = new THREE.MeshPhongMaterial({ color, shininess: 60, specular: 0x333333 });
-      const mesh  = new THREE.Mesh(geo, mat);
-      mesh.castShadow = true;
-      group.add(mesh);
+    contributors.forEach((c, i) => {
+      const frac = c.amount / total;
+      const span = frac * 360 - PIE_GAP;
+      if (span <= 0) { angle += frac * 360; return; }
 
-      // Top cap
-      const capGeo = new THREE.CircleGeometry(RADIUS, SEGS, angle + GAP / 2, theta);
-      const capMat = new THREE.MeshPhongMaterial({ color, shininess: 80, side: THREE.DoubleSide });
-      const cap    = new THREE.Mesh(capGeo, capMat);
-      cap.rotation.x = -Math.PI / 2;
-      cap.position.y = HEIGHT / 2;
-      group.add(cap);
+      const start = angle + PIE_GAP / 2;
+      const end   = start + span;
+      const mid   = (start + end) / 2;
+      const midRad = (mid - 90) * Math.PI / 180;
+      const tx = (Math.cos(midRad) * 10).toFixed(2);
+      const ty = (Math.sin(midRad) * 10).toFixed(2);
+      const col = PIE_COLORS[i % PIE_COLORS.length];
+      const d   = _arc(start, end);
+      const delay = (i * 0.065).toFixed(3);
 
-      // Bottom cap
-      const botCap = cap.clone();
-      botCap.position.y = -HEIGHT / 2;
-      group.add(botCap);
+      // Per-slice gradients
+      defs += `
+        <radialGradient id="pg${i}" cx="40%" cy="35%" r="68%" gradientUnits="objectBoundingBox">
+          <stop offset="0%"   stop-color="rgba(${col.r},${col.g},${col.b},0.95)"/>
+          <stop offset="100%" stop-color="rgba(${col.r},${col.g},${col.b},0.42)"/>
+        </radialGradient>
+        <linearGradient id="sh${i}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stop-color="rgba(255,255,255,0.38)"/>
+          <stop offset="55%" stop-color="rgba(255,255,255,0)"/>
+        </linearGradient>`;
 
-      angle += frac * Math.PI * 2;
+      slicesHTML += `
+        <g class="pie-group" data-i="${i}"
+           data-tx="${tx}" data-ty="${ty}"
+           style="animation-delay:${delay}s">
+          <path d="${d}"
+            fill="url(#pg${i})"
+            stroke="rgba(${col.r},${col.g},${col.b},0.75)"
+            stroke-width="1.5"
+            class="pie-slice"/>
+          <path d="${d}" fill="url(#sh${i})" class="pie-sheen"/>
+        </g>`;
+
+      angle += frac * 360;
+    });
+
+    const totalFmt = '$' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    container.innerHTML = `
+      <svg viewBox="0 0 300 300" class="pool-pie-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>${defs}</defs>
+        <g filter="url(#pieShadow)">${slicesHTML}</g>
+        <circle cx="${PIE_CX}" cy="${PIE_CY}" r="${PIE_INNER - 2}" class="pie-center"/>
+        <text x="${PIE_CX}" y="${PIE_CY - 8}" text-anchor="middle" class="pie-clabel">Pool</text>
+        <text x="${PIE_CX}" y="${PIE_CY + 13}" text-anchor="middle" class="pie-cvalue">${escHtml(totalFmt)}</text>
+      </svg>`;
+
+    // Wire hover interactions
+    container.querySelectorAll('.pie-group').forEach(g => {
+      const i   = parseInt(g.dataset.i);
+      const tx  = parseFloat(g.dataset.tx);
+      const ty  = parseFloat(g.dataset.ty);
+      const c   = contributors[i];
+      const col = PIE_COLORS[i % PIE_COLORS.length];
+      const pct = (c.amount / total * 100).toFixed(1);
+      const amt = '$' + c.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      g.addEventListener('mouseenter', () => {
+        g.style.transform = `translate(${tx}px,${ty}px)`;
+        _showTip(c.name, amt, pct, col.h);
+      });
+      g.addEventListener('mousemove', _moveTip);
+      g.addEventListener('mouseleave', () => { g.style.transform = ''; _hideTip(); });
     });
   }
 
@@ -2240,21 +2288,14 @@ document.addEventListener('DOMContentLoaded', init);
     $id('poolChartWrap').hidden = !hasData;
     if (!hasData) return;
 
-    if (!threeScene) {
-      const ts = initThree();
-      buildPieSlices(contributors);
-      ts.animate();
-    } else {
-      buildPieSlices(contributors);
-    }
+    renderPieSVG();
 
-    // Legend
     const total = contributors.reduce((s, c) => s + c.amount, 0);
     $id('poolChartLegend').innerHTML = contributors.map((c, i) => {
-      const pct   = total > 0 ? (c.amount / total * 100).toFixed(1) : '0.0';
-      const hex   = '#' + PIE_COLORS[i % PIE_COLORS.length].toString(16).padStart(6, '0');
+      const pct = total > 0 ? (c.amount / total * 100).toFixed(1) : '0.0';
+      const col = PIE_COLORS[i % PIE_COLORS.length];
       return `<div class="pool-legend-item">
-        <span class="pool-legend-swatch" style="background:${hex}"></span>
+        <span class="pool-legend-swatch" style="background:${col.h};box-shadow:0 0 7px ${col.h}88"></span>
         <span class="pool-legend-name" title="${escHtml(c.name)}">${escHtml(c.name)}</span>
         <span class="pool-legend-pct">${pct}%</span>
       </div>`;
@@ -2282,14 +2323,12 @@ document.addEventListener('DOMContentLoaded', init);
 
     tbody.innerHTML = contributors.map((c, i) => {
       const ret   = c.amount * RETURN_RATE;
-      const owed  = c.amount + ret;
       const share = total > 0 ? (c.amount / total * 100) : 0;
       return `
         <tr>
           <td class="pool-name-cell">${escHtml(c.name)}</td>
           <td>${fmt(c.amount)}</td>
           <td class="pool-return-cell">${fmt(ret)}</td>
-          <td class="pool-total-cell">${fmt(owed)}</td>
           <td class="pool-share-cell">
             <div class="pool-bar-wrap">
               <span>${share.toFixed(1)}%</span>

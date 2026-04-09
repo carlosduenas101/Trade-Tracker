@@ -6,7 +6,6 @@
   <title>IllusTrade</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.min.js"></script>
 </head>
 <body>
 
@@ -283,11 +282,9 @@
           </div>
         </div>
 
-        <!-- 3D Pie chart -->
+        <!-- Glassmorphic pie chart -->
         <div class="pool-chart-wrap" id="poolChartWrap" hidden>
-          <div class="pool-chart-inner">
-            <canvas id="poolPieCanvas"></canvas>
-          </div>
+          <div class="pool-pie-container" id="poolPieContainer"></div>
           <div class="pool-chart-legend" id="poolChartLegend"></div>
         </div>
 
@@ -299,7 +296,6 @@
                 <th>Name</th>
                 <th>Contributed</th>
                 <th>5% Return</th>
-                <th>Total Owed</th>
                 <th>Pool Share</th>
                 <th></th>
               </tr>
