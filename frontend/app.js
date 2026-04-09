@@ -2264,11 +2264,19 @@ document.addEventListener('DOMContentLoaded', init);
         <text x="${PIE_CX}" y="${PIE_CY + 13}" text-anchor="middle" class="pie-cvalue">${escHtml(totalFmt)}</text>
       </svg>`;
 
-    // Wire hover interactions
-    container.querySelectorAll('.pie-group').forEach(g => {
+    // Trigger fade-in after browser has painted (avoids opacity-0 stuck state)
+    const groups = [...container.querySelectorAll('.pie-group')];
+    requestAnimationFrame(() => {
+      groups.forEach((g, idx) => {
+        setTimeout(() => g.classList.add('pie-visible'), idx * 65);
+      });
+    });
+
+    // Wire hover — use SVG transform attribute so units stay in SVG-space
+    groups.forEach(g => {
       const i   = parseInt(g.dataset.i);
-      const tx  = parseFloat(g.dataset.tx);
-      const ty  = parseFloat(g.dataset.ty);
+      const tx  = g.dataset.tx;   // already in SVG user units
+      const ty  = g.dataset.ty;
       const c   = contributors[i];
       const col = PIE_COLORS[i % PIE_COLORS.length];
       const pct = (c.amount / total * 100).toFixed(1);
