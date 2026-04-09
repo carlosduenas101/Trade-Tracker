@@ -243,6 +243,65 @@
       </div>
     </section>
 
+    <!-- ── POOL FUND DASHBOARD ──────────────────────────── -->
+    <section class="pool-section" aria-label="Fund pool manager">
+      <div class="section-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <h2 class="section-title">Fund Pool</h2>
+          <span class="pool-rate-badge">5% Return</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="poolToggleBtn">Hide</button>
+      </div>
+
+      <div id="poolBody">
+
+        <!-- Add contributor -->
+        <div class="pool-add-row">
+          <input class="input-field pool-input" type="text"   id="poolName"   placeholder="Name" autocomplete="off" />
+          <input class="input-field pool-input pool-input-amt" type="number" id="poolAmt"    placeholder="Amount ($)" min="0" step="any" />
+          <button class="btn btn-primary btn-sm" id="poolAddBtn">+ Add</button>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="pool-summary" id="poolSummary" hidden>
+          <div class="pool-card">
+            <div class="pool-card-label">Total Pool</div>
+            <div class="pool-card-value" id="poolTotal">$0</div>
+          </div>
+          <div class="pool-card">
+            <div class="pool-card-label">5% Returns Owed</div>
+            <div class="pool-card-value pool-card-accent" id="poolReturns">$0</div>
+          </div>
+          <div class="pool-card">
+            <div class="pool-card-label">Total After Returns</div>
+            <div class="pool-card-value pool-card-green" id="poolAfter">$0</div>
+          </div>
+          <div class="pool-card">
+            <div class="pool-card-label">Contributors</div>
+            <div class="pool-card-value" id="poolCount">0</div>
+          </div>
+        </div>
+
+        <!-- Contributors table -->
+        <div class="pool-table-wrap" id="poolTableWrap" hidden>
+          <table class="pool-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Contributed</th>
+                <th>5% Return</th>
+                <th>Total Owed</th>
+                <th>Pool Share</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="poolTableBody"></tbody>
+          </table>
+        </div>
+
+      </div><!-- /#poolBody -->
+    </section>
+
     <!-- ── TRADES TABLE ───────────────────────────────── -->
     <section class="table-section" aria-label="Trade history">
       <div class="section-header">

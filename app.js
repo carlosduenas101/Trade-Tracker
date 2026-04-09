@@ -2092,3 +2092,98 @@ document.addEventListener('DOMContentLoaded', init);
     $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') $('fibCalcBtn').click(); });
   });
 })();
+
+/* ════════════════════════════════════════════════════════════
+   POOL FUND DASHBOARD
+   ════════════════════════════════════════════════════════════ */
+(function initPool() {
+  const STORAGE_KEY = 'pool_contributors';
+  const RETURN_RATE = 0.05;
+
+  const $id = (id) => document.getElementById(id);
+  const fmt = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // ── State ──────────────────────────────────────────────────
+  let contributors = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+  // ── Render ─────────────────────────────────────────────────
+  function render() {
+    const tbody    = $id('poolTableBody');
+    const total    = contributors.reduce((s, c) => s + c.amount, 0);
+    const returns  = total * RETURN_RATE;
+    const after    = total + returns;
+
+    // Show/hide sections
+    const hasData = contributors.length > 0;
+    $id('poolSummary').hidden    = !hasData;
+    $id('poolTableWrap').hidden  = !hasData;
+
+    if (hasData) {
+      $id('poolTotal').textContent   = fmt(total);
+      $id('poolReturns').textContent = fmt(returns);
+      $id('poolAfter').textContent   = fmt(after);
+      $id('poolCount').textContent   = contributors.length;
+    }
+
+    tbody.innerHTML = contributors.map((c, i) => {
+      const ret   = c.amount * RETURN_RATE;
+      const owed  = c.amount + ret;
+      const share = total > 0 ? (c.amount / total * 100) : 0;
+      return `
+        <tr>
+          <td class="pool-name-cell">${escHtml(c.name)}</td>
+          <td>${fmt(c.amount)}</td>
+          <td class="pool-return-cell">${fmt(ret)}</td>
+          <td class="pool-total-cell">${fmt(owed)}</td>
+          <td class="pool-share-cell">
+            <div class="pool-bar-wrap">
+              <span>${share.toFixed(1)}%</span>
+              <div class="pool-bar"><div class="pool-bar-fill" style="width:${share}%"></div></div>
+            </div>
+          </td>
+          <td><button class="pool-del-btn" data-idx="${i}" title="Remove">✕</button></td>
+        </tr>`;
+    }).join('');
+  }
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(contributors));
+  }
+
+  // ── Add contributor ────────────────────────────────────────
+  $id('poolAddBtn').addEventListener('click', () => {
+    const name   = $id('poolName').value.trim();
+    const amount = parseFloat($id('poolAmt').value);
+    if (!name || !amount || amount <= 0) return;
+    contributors.push({ name, amount });
+    save();
+    render();
+    $id('poolName').value = '';
+    $id('poolAmt').value  = '';
+    $id('poolName').focus();
+  });
+
+  // Enter key in inputs
+  [$id('poolName'), $id('poolAmt')].forEach(el => {
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') $id('poolAddBtn').click(); });
+  });
+
+  // ── Delete contributor ─────────────────────────────────────
+  $id('poolTableBody').addEventListener('click', e => {
+    const btn = e.target.closest('.pool-del-btn');
+    if (!btn) return;
+    contributors.splice(parseInt(btn.dataset.idx), 1);
+    save();
+    render();
+  });
+
+  // ── Toggle section ─────────────────────────────────────────
+  $id('poolToggleBtn').addEventListener('click', () => {
+    const body = $id('poolBody');
+    const hidden = body.style.display === 'none';
+    body.style.display = hidden ? '' : 'none';
+    $id('poolToggleBtn').textContent = hidden ? 'Hide' : 'Show';
+  });
+
+  render();
+})();
