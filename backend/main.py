@@ -89,16 +89,10 @@ def on_startup() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Serve frontend
+# Frontend path (resolved once at startup)
 # ---------------------------------------------------------------------------
 
-_frontend = Path(__file__).parent.parent / "frontend"
-app.mount("/static", StaticFiles(directory=str(_frontend)), name="static")
-
-
-@app.get("/", include_in_schema=False)
-def serve_index():
-    return FileResponse(str(_frontend / "index.html"))
+_frontend = Path(__file__).resolve().parent.parent / "frontend"
 
 
 # ---------------------------------------------------------------------------
@@ -656,3 +650,16 @@ def get_metrics(
     return get_all_metrics(trades)
 
 
+# ---------------------------------------------------------------------------
+# Serve frontend — catch-all LAST so every API route above takes priority.
+# GET /           → index.html
+# GET /style.css  → style.css  (FileResponse auto-sets Content-Type)
+# GET /any/path   → index.html (SPA fallback)
+# ---------------------------------------------------------------------------
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_frontend(full_path: str):
+    target = _frontend / full_path
+    if target.is_file():
+        return FileResponse(str(target))
+    return FileResponse(str(_frontend / "index.html"))

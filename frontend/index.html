@@ -6,6 +6,7 @@
   <title>IllusTrade</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.min.js"></script>
 </head>
 <body>
 
@@ -13,7 +14,7 @@
   <canvas id="bgCanvas" aria-hidden="true"></canvas>
 
   <!-- ═══════════════════════════════════════════════ LOGIN SCREEN -->
-  <div class="login-screen" id="loginScreen">
+  <div class="login-screen" id="loginScreen" hidden>
 
     <!-- Animated line-chart background (login only) -->
     <canvas id="loginCanvas" aria-hidden="true"></canvas>
@@ -280,6 +281,14 @@
             <div class="pool-card-label">Contributors</div>
             <div class="pool-card-value" id="poolCount">0</div>
           </div>
+        </div>
+
+        <!-- 3D Pie chart -->
+        <div class="pool-chart-wrap" id="poolChartWrap" hidden>
+          <div class="pool-chart-inner">
+            <canvas id="poolPieCanvas"></canvas>
+          </div>
+          <div class="pool-chart-legend" id="poolChartLegend"></div>
         </div>
 
         <!-- Contributors table -->

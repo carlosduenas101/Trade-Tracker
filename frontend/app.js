@@ -1531,6 +1531,9 @@ async function refreshAll() {
 function showLoginScreen() {
   document.getElementById('loginScreen').hidden = false;
   document.getElementById('userInfo').hidden = true;
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.disabled = false;
+  loginBtn.textContent = 'Sign In';
 }
 
 function showApp(user) {
@@ -1543,33 +1546,49 @@ async function doLogin(username, password) {
   const loginBtn   = document.getElementById('loginBtn');
   const loginError = document.getElementById('loginError');
   loginBtn.disabled = true;
-  loginBtn.textContent = 'Signing in…';
   loginError.hidden = true;
 
-  try {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j.detail || 'Login failed.');
+  const MAX_RETRIES  = 10;
+  const RETRY_DELAY  = 6000; // ms between retries while server wakes up
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    loginBtn.textContent = attempt === 0 ? 'Signing in…' : `Server starting up… (${attempt}/${MAX_RETRIES})`;
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.detail || 'Login failed.');
+      }
+      const data = await res.json();
+      saveAuth(data.access_token, data.user);
+      showApp(data.user);
+      setDefaultDateRange();
+      bindEvents();
+      setConnectionStatus('', 'Connecting…');
+      await refreshAll();
+      return; // success — exit loop
+    } catch (err) {
+      // TypeError means a network/CORS failure (server sleeping or not yet up)
+      // Retry those; surface real HTTP errors (wrong password, etc.) immediately
+      if (err instanceof TypeError && attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY));
+        continue;
+      }
+      loginError.textContent = (attempt >= MAX_RETRIES)
+        ? 'Server is taking too long to respond. Please try again in a moment.'
+        : err.message;
+      loginError.hidden = false;
+      break;
     }
-    const data = await res.json();
-    saveAuth(data.access_token, data.user);
-    showApp(data.user);
-    setDefaultDateRange();
-    bindEvents();
-    setConnectionStatus('', 'Connecting…');
-    await refreshAll();
-  } catch (err) {
-    loginError.textContent = err.message;
-    loginError.hidden = false;
-  } finally {
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'Sign In';
   }
+
+  loginBtn.disabled = false;
+  loginBtn.textContent = 'Sign In';
 }
 
 function doLogout() {
@@ -1947,12 +1966,18 @@ async function init() {
   const user  = getStoredUser();
 
   if (token && user) {
+    // Show login screen locked while we verify the stored token
+    document.getElementById('loginScreen').hidden = false;
+    const _verifyBtn = document.getElementById('loginBtn');
+    _verifyBtn.disabled = true;
+    _verifyBtn.textContent = 'Verifying…';
+
     // Verify the stored token is still accepted by the server
     try {
       const res = await fetch(`${API_BASE}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('token invalid');
+      if (!res.ok) throw new Error('token_invalid');
       const currentUser = await res.json();
       saveAuth(token, currentUser);   // refresh stored user data
       showApp(currentUser);
@@ -1961,12 +1986,26 @@ async function init() {
       setConnectionStatus('', 'Connecting…');
       await refreshAll();
       return;
-    } catch {
-      clearAuth();
+    } catch (err) {
+      // Only clear stored credentials on an explicit auth rejection (401/403).
+      // A network/CORS failure (TypeError) means the server is sleeping — keep
+      // the token so the user can log in again without re-entering credentials.
+      if (err.message === 'token_invalid') {
+        clearAuth();
+      }
+      // Either way fall through to show the login screen
     }
   }
 
   showLoginScreen();
+
+  // If a stored user exists (server was just sleeping), pre-fill the username
+  const storedUser = getStoredUser();
+  if (storedUser?.username) {
+    const usernameEl = document.getElementById('loginUsername');
+    if (usernameEl && !usernameEl.value) usernameEl.value = storedUser.username;
+    document.getElementById('loginPassword')?.focus();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
@@ -2106,6 +2145,122 @@ document.addEventListener('DOMContentLoaded', init);
   // ── State ──────────────────────────────────────────────────
   let contributors = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 
+  // ── 3D Pie Chart (Three.js) ────────────────────────────────
+  const PIE_COLORS = [
+    0x39ff14, 0x00cfff, 0xff6b35, 0xc77dff, 0xffd166,
+    0xef233c, 0x06d6a0, 0xff85a1, 0xf4a261, 0x457b9d,
+  ];
+
+  let threeScene = null;
+
+  function initThree() {
+    const canvas = $id('poolPieCanvas');
+    const wrap   = canvas.parentElement;
+    const W = wrap.clientWidth  || 260;
+    const H = wrap.clientHeight || 180;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(W, H);
+    renderer.setClearColor(0x000000, 0);
+
+    const scene  = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
+    camera.position.set(0, 2.8, 3.5);
+    camera.lookAt(0, 0, 0);
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(3, 6, 4);
+    scene.add(dir);
+    const dir2 = new THREE.DirectionalLight(0xffffff, 0.3);
+    dir2.position.set(-3, -2, -4);
+    scene.add(dir2);
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    let animId = null;
+    function animate() {
+      animId = requestAnimationFrame(animate);
+      group.rotation.y += 0.008;
+      renderer.render(scene, camera);
+    }
+
+    threeScene = { renderer, scene, camera, group, animate, animId, canvas };
+    return threeScene;
+  }
+
+  function buildPieSlices(contributorsData) {
+    const total = contributorsData.reduce((s, c) => s + c.amount, 0);
+    if (!threeScene) return;
+    const { group } = threeScene;
+    // Remove old slices
+    while (group.children.length) group.remove(group.children[0]);
+    if (total === 0) return;
+
+    const HEIGHT = 0.55;
+    const RADIUS = 1.5;
+    const GAP    = 0.012; // small angular gap between slices
+    const SEGS   = 64;
+
+    let angle = 0;
+    contributorsData.forEach((c, i) => {
+      const frac   = c.amount / total;
+      const theta  = frac * Math.PI * 2 - GAP;
+      if (theta <= 0) return;
+
+      const color = PIE_COLORS[i % PIE_COLORS.length];
+      const geo   = new THREE.CylinderGeometry(RADIUS, RADIUS, HEIGHT, SEGS, 1, false, angle + GAP / 2, theta);
+      const mat   = new THREE.MeshPhongMaterial({ color, shininess: 60, specular: 0x333333 });
+      const mesh  = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      group.add(mesh);
+
+      // Top cap
+      const capGeo = new THREE.CircleGeometry(RADIUS, SEGS, angle + GAP / 2, theta);
+      const capMat = new THREE.MeshPhongMaterial({ color, shininess: 80, side: THREE.DoubleSide });
+      const cap    = new THREE.Mesh(capGeo, capMat);
+      cap.rotation.x = -Math.PI / 2;
+      cap.position.y = HEIGHT / 2;
+      group.add(cap);
+
+      // Bottom cap
+      const botCap = cap.clone();
+      botCap.position.y = -HEIGHT / 2;
+      group.add(botCap);
+
+      angle += frac * Math.PI * 2;
+    });
+  }
+
+  function updatePieChart() {
+    const hasData = contributors.length > 0;
+    $id('poolChartWrap').hidden = !hasData;
+    if (!hasData) return;
+
+    if (!threeScene) {
+      const ts = initThree();
+      buildPieSlices(contributors);
+      ts.animate();
+    } else {
+      buildPieSlices(contributors);
+    }
+
+    // Legend
+    const total = contributors.reduce((s, c) => s + c.amount, 0);
+    $id('poolChartLegend').innerHTML = contributors.map((c, i) => {
+      const pct   = total > 0 ? (c.amount / total * 100).toFixed(1) : '0.0';
+      const hex   = '#' + PIE_COLORS[i % PIE_COLORS.length].toString(16).padStart(6, '0');
+      return `<div class="pool-legend-item">
+        <span class="pool-legend-swatch" style="background:${hex}"></span>
+        <span class="pool-legend-name" title="${escHtml(c.name)}">${escHtml(c.name)}</span>
+        <span class="pool-legend-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+  }
+
   // ── Render ─────────────────────────────────────────────────
   function render() {
     const tbody    = $id('poolTableBody');
@@ -2144,6 +2299,8 @@ document.addEventListener('DOMContentLoaded', init);
           <td><button class="pool-del-btn" data-idx="${i}" title="Remove">✕</button></td>
         </tr>`;
     }).join('');
+
+    updatePieChart();
   }
 
   function save() {
