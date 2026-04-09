@@ -130,6 +130,8 @@
   <!-- ═══════════════════════════════════════════════ MAIN CONTENT -->
   <main class="main-content">
 
+  <div class="content-left">
+
     <!-- ── TOOLBAR ──────────────────────────────────── -->
     <section class="toolbar" aria-label="Filters and actions">
       <div class="filter-group">
@@ -347,6 +349,150 @@
         <button class="btn-inline" id="retryBtn">Retry</button>
       </div>
     </section>
+
+  </div><!-- /.content-left -->
+
+  <!-- ═══════════════════════════════════════════════ FIB CALCULATOR -->
+  <aside class="fib-calc" id="fibCalc">
+    <div class="fib-calc-header">
+      <span class="fib-calc-icon">◈</span>
+      <h3 class="fib-calc-title">Fib Multi-Entry Calc</h3>
+    </div>
+
+    <div class="fib-calc-body">
+
+      <!-- Inputs -->
+      <div class="fib-field">
+        <label class="fib-label">Account Size ($)</label>
+        <input class="fib-input" type="number" id="fcAccount" placeholder="10,000" min="0" step="any" />
+      </div>
+
+      <div class="fib-field">
+        <label class="fib-label">Simultaneous Trades</label>
+        <div class="fib-toggle-group">
+          <button class="fib-toggle active" data-trades="1">1 Trade</button>
+          <button class="fib-toggle" data-trades="2">2 Trades</button>
+        </div>
+      </div>
+
+      <div class="fib-field">
+        <label class="fib-label">Direction</label>
+        <div class="fib-toggle-group">
+          <button class="fib-toggle active" data-dir="long">▲ Long</button>
+          <button class="fib-toggle" data-dir="short">▼ Short</button>
+        </div>
+      </div>
+
+      <div class="fib-field">
+        <label class="fib-label">E1 Entry Price</label>
+        <input class="fib-input" type="number" id="fcE1" placeholder="0.00" min="0" step="any" />
+      </div>
+
+      <button class="btn btn-primary fib-calc-btn" id="fibCalcBtn">Calculate</button>
+
+      <!-- Results -->
+      <div class="fib-results" id="fibResults" hidden>
+
+        <!-- Account Summary -->
+        <div class="fib-section-title">Account Overview</div>
+        <div class="fib-grid">
+          <div class="fib-row">
+            <span class="fib-key">Deployed Capital</span>
+            <span class="fib-val" id="frDeployed">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key">Per Trade Capital</span>
+            <span class="fib-val" id="frTradeCap">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key">Reserve</span>
+            <span class="fib-val fib-muted" id="frReserve">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key">Max Loss (Total)</span>
+            <span class="fib-val fib-red" id="frMaxLoss">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key">Max Loss / Trade</span>
+            <span class="fib-val fib-red" id="frMaxLossPer">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key">Leverage</span>
+            <span class="fib-val fib-accent">6×</span>
+          </div>
+        </div>
+
+        <!-- Entry Prices -->
+        <div class="fib-section-title">Entry Structure</div>
+        <div class="fib-grid">
+          <div class="fib-row">
+            <span class="fib-key fib-e1">E1</span>
+            <span class="fib-val" id="frE1">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key fib-e2">E2 <span class="fib-pct">±1.618%</span></span>
+            <span class="fib-val" id="frE2">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key fib-e3">E3 <span class="fib-pct">±2.618%</span></span>
+            <span class="fib-val" id="frE3">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key fib-e4">E4 <span class="fib-pct">±3.618%</span></span>
+            <span class="fib-val" id="frE4">—</span>
+          </div>
+          <div class="fib-row fib-divider">
+            <span class="fib-key">Weighted Avg Entry</span>
+            <span class="fib-val fib-accent" id="frWavg">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key fib-sl">Stop Loss <span class="fib-pct">±3.70%</span></span>
+            <span class="fib-val fib-red" id="frSL">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key fib-tp">Take Profit <span class="fib-pct">±5%</span></span>
+            <span class="fib-val fib-green" id="frTP">—</span>
+          </div>
+        </div>
+
+        <!-- Capital Allocation Table -->
+        <div class="fib-section-title">Capital Allocation</div>
+        <table class="fib-table">
+          <thead>
+            <tr>
+              <th>Entry</th>
+              <th>Alloc</th>
+              <th>Capital $</th>
+              <th>Exposure $</th>
+            </tr>
+          </thead>
+          <tbody id="frAllocBody"></tbody>
+          <tfoot>
+            <tr class="fib-table-total">
+              <td colspan="2">Total</td>
+              <td id="frTotalCap">—</td>
+              <td id="frTotalExp">—</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <!-- SL Verification -->
+        <div class="fib-sl-verify" id="frVerify">
+          <div class="fib-verify-label">SL Verification</div>
+          <div class="fib-verify-row">
+            <span>Actual loss at SL</span>
+            <span id="frActualLoss">—</span>
+          </div>
+          <div class="fib-verify-row">
+            <span>Max allowed (10%)</span>
+            <span id="frMaxAllowed">—</span>
+          </div>
+          <div class="fib-verify-badge" id="frBadge">—</div>
+        </div>
+
+      </div><!-- /.fib-results -->
+    </div><!-- /.fib-calc-body -->
+  </aside>
 
   </main>
 

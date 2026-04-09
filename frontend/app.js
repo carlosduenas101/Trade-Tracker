@@ -1970,3 +1970,129 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+/* ════════════════════════════════════════════════════════════
+   FIB MULTI-ENTRY CALCULATOR
+   ════════════════════════════════════════════════════════════ */
+(function initFibCalc() {
+  const $ = (id) => document.getElementById(id);
+
+  // ── Toggle groups ──────────────────────────────────────────
+  document.querySelectorAll('.fib-toggle[data-trades]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.fib-toggle[data-trades]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.fib-toggle[data-dir]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.fib-toggle[data-dir]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // ── Calculate ──────────────────────────────────────────────
+  $('fibCalcBtn').addEventListener('click', () => {
+    const account   = parseFloat($('fcAccount').value);
+    const e1Price   = parseFloat($('fcE1').value);
+    const numTrades = parseInt(document.querySelector('.fib-toggle[data-trades].active')?.dataset.trades || '1');
+    const direction = document.querySelector('.fib-toggle[data-dir].active')?.dataset.dir || 'long';
+
+    if (!account || account <= 0 || !e1Price || e1Price <= 0) return;
+
+    const isLong   = direction === 'long';
+    const s        = isLong ? -1 : 1;   // -1 = subtract (long), +1 = add (short)
+    const leverage = 6;
+
+    // Account rules
+    const deployed       = account * 0.45;
+    const reserve        = account * 0.55;
+    const maxLoss        = account * 0.10;
+    const tradeCap       = deployed / numTrades;
+    const maxLossPerTrade = maxLoss / numTrades;
+
+    // Entry prices
+    const e1 = e1Price;
+    const e2 = e1 * (1 + s * 0.01618);
+    const e3 = e2 * (1 + s * 0.02618);
+    const e4 = e3 * (1 + s * 0.03618);
+    const sl = e4 * (1 + s * 0.0370);
+
+    // Capital split per entry (% of trade capital)
+    const pcts    = [0.15, 0.225, 0.30, 0.325];
+    const entries = [e1, e2, e3, e4];
+    const labels  = ['E1', 'E2', 'E3', 'E4'];
+    const capitals  = pcts.map(p => tradeCap * p);
+    const exposures = capitals.map(c => c * leverage);
+    const totalCap  = capitals.reduce((a, b) => a + b, 0);
+    const totalExp  = exposures.reduce((a, b) => a + b, 0);
+
+    // Weighted average entry (pcts already sum to 1.0)
+    const wavg = entries.reduce((sum, e, i) => sum + e * pcts[i], 0);
+
+    // Take profit: 5% from wavg
+    const tp = isLong ? wavg * 1.05 : wavg * 0.95;
+
+    // SL verification — actual dollar loss at stop
+    // position_i = (capital_i × leverage) / entry_i  [units]
+    // loss_i = |entry_i − SL| × position_i
+    const actualLossPerTrade = entries.reduce((sum, e, i) => {
+      const units = capitals[i] * leverage / e;
+      const loss  = isLong ? (e - sl) * units : (sl - e) * units;
+      return sum + loss;
+    }, 0);
+    const totalActualLoss = actualLossPerTrade * numTrades;
+    const slPass = totalActualLoss <= maxLoss + 0.01; // small float tolerance
+
+    // ── Render ─────────────────────────────────────────────
+    const fmt  = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtP = (n, d = 5) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: d });
+
+    $('frDeployed').textContent   = fmt(deployed);
+    $('frTradeCap').textContent   = fmt(tradeCap) + (numTrades > 1 ? ` ×${numTrades}` : '');
+    $('frReserve').textContent    = fmt(reserve);
+    $('frMaxLoss').textContent    = fmt(maxLoss);
+    $('frMaxLossPer').textContent = fmt(maxLossPerTrade);
+
+    $('frE1').textContent   = fmtP(e1);
+    $('frE2').textContent   = fmtP(e2);
+    $('frE3').textContent   = fmtP(e3);
+    $('frE4').textContent   = fmtP(e4);
+    $('frSL').textContent   = fmtP(sl);
+    $('frWavg').textContent = fmtP(wavg);
+    $('frTP').textContent   = fmtP(tp);
+
+    // Allocation table
+    const entryColors = ['var(--accent-primary)', '#7affcc', '#7ab8ff', '#c17aff'];
+    const tbody = $('frAllocBody');
+    tbody.innerHTML = entries.map((e, i) => `
+      <tr>
+        <td style="color:${entryColors[i]}">${labels[i]}</td>
+        <td>${(pcts[i] * 100).toFixed(1)}%</td>
+        <td>${fmt(capitals[i])}</td>
+        <td>${fmt(exposures[i])}</td>
+      </tr>`).join('');
+
+    $('frTotalCap').textContent = fmt(totalCap);
+    $('frTotalExp').textContent = fmt(totalExp);
+
+    // SL verification
+    $('frActualLoss').textContent = fmt(totalActualLoss);
+    $('frMaxAllowed').textContent = fmt(maxLoss);
+    const badge = $('frBadge');
+    if (slPass) {
+      badge.textContent = '✓ Within Max Loss Limit';
+      badge.className = 'fib-verify-badge pass';
+    } else {
+      badge.textContent = '✗ Exceeds Max Loss — Adjust Position';
+      badge.className = 'fib-verify-badge fail';
+    }
+
+    $('fibResults').hidden = false;
+  });
+
+  // Also trigger on Enter key in inputs
+  ['fcAccount', 'fcE1'].forEach(id => {
+    $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') $('fibCalcBtn').click(); });
+  });
+})();
