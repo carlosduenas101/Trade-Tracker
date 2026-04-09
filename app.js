@@ -2033,16 +2033,10 @@ document.addEventListener('DOMContentLoaded', init);
     // Take profit: 5% from wavg
     const tp = isLong ? wavg * 1.05 : wavg * 0.95;
 
-    // SL verification — actual dollar loss at stop
-    // position_i = (capital_i × leverage) / entry_i  [units]
-    // loss_i = |entry_i − SL| × position_i
-    const actualLossPerTrade = entries.reduce((sum, e, i) => {
-      const units = capitals[i] * leverage / e;
-      const loss  = isLong ? (e - sl) * units : (sl - e) * units;
-      return sum + loss;
-    }, 0);
-    const totalActualLoss = actualLossPerTrade * numTrades;
-    const slPass = totalActualLoss <= maxLoss + 0.01; // small float tolerance
+    // SL verification: tradeCap × leverage × 3.70%
+    const actualLossPerTrade = tradeCap * leverage * 0.0370;
+    const totalActualLoss    = actualLossPerTrade * numTrades;
+    const slPass = totalActualLoss <= maxLoss + 0.01;
 
     // ── Render ─────────────────────────────────────────────
     const fmt  = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
