@@ -1132,38 +1132,44 @@ async function deleteTrade(id) {
    ════════════════════════════════════════════════════════════ */
 
 /**
- * Patch a CSV file so that any missing/empty "quantity" cell becomes "0".
- * Handles tab, comma, semicolon, and pipe delimiters.
- * Leaves the file unchanged if quantity is not a column (backend will default it).
+ * Ensure every row in the CSV has a non-empty "quantity" cell.
+ * If the column is missing entirely, appends it with value 0.
+ * If cells are blank, fills them with 0.
+ * Handles tab, comma, semicolon, pipe delimiters.
  */
 async function _patchCSVQuantity(file) {
   const raw = await file.text();
   const lines = raw.split(/\r?\n/);
   if (lines.length < 2) return file;
 
-  // Detect delimiter
+  // Detect delimiter (try tab first, then others)
   const delims = ['\t', ',', ';', '|'];
   let delim = ',';
   for (const d of delims) {
     if (lines[0].includes(d)) { delim = d; break; }
   }
 
-  const headers = lines[0].split(delim).map(h => h.replace(/^\uFEFF/, '').trim().toLowerCase());
-  const qtyIdx  = headers.findIndex(h => ['quantity','qty','size','amount','contracts','volume'].includes(h));
-  if (qtyIdx === -1) return file; // no qty column — backend will handle
+  // Strip BOM from header line
+  const headerLine = lines[0].replace(/^\uFEFF/, '');
+  const headers = headerLine.split(delim).map(h => h.trim().toLowerCase());
+  let qtyIdx = headers.findIndex(h => ['quantity','qty','size','amount','contracts','volume'].includes(h));
 
-  let patched = false;
+  if (qtyIdx === -1) {
+    // Column doesn't exist at all — append it to every row
+    const out = lines.map((line, i) => {
+      if (!line.trim()) return line;
+      return line.trimEnd() + delim + (i === 0 ? 'quantity' : '0');
+    });
+    return new File([out.join('\n')], file.name, { type: 'text/csv' });
+  }
+
+  // Column exists — replace any empty cells with '0'
   const out = lines.map((line, i) => {
     if (i === 0 || !line.trim()) return line;
     const cols = line.split(delim);
-    if (!cols[qtyIdx] || !cols[qtyIdx].trim()) {
-      cols[qtyIdx] = '0';
-      patched = true;
-    }
+    if (!cols[qtyIdx] || !cols[qtyIdx].trim()) cols[qtyIdx] = '0';
     return cols.join(delim);
   });
-
-  if (!patched) return file;
   return new File([out.join('\n')], file.name, { type: 'text/csv' });
 }
 
