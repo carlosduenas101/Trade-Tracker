@@ -2434,3 +2434,42 @@ document.addEventListener('DOMContentLoaded', init);
 
   render();
 })();
+
+/* ════════════════════════════════════════════════════════════
+   MOBILE — FIB CALCULATOR DRAWER
+   ════════════════════════════════════════════════════════════ */
+(function initCalcDrawer() {
+  const calc     = document.getElementById('fibCalc');
+  const backdrop = document.getElementById('fibBackdrop');
+  const fab      = document.getElementById('fibFab');
+  const closeBtn = document.getElementById('fibCloseBtn');
+
+  function openCalc() {
+    calc?.classList.add('calc-open');
+    backdrop?.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeCalc() {
+    calc?.classList.remove('calc-open');
+    backdrop?.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  fab?.addEventListener('click', openCalc);
+  closeBtn?.addEventListener('click', closeCalc);
+  backdrop?.addEventListener('click', closeCalc);
+
+  // Close on Escape (unless a modal is open)
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && calc?.classList.contains('calc-open')) {
+      e.stopPropagation();
+      closeCalc();
+    }
+  });
+
+  // Close drawer automatically when resizing back to desktop
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) closeCalc();
+  });
+})();

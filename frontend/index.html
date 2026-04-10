@@ -416,11 +416,15 @@
 
   </div><!-- /.content-left -->
 
+  <!-- Calculator backdrop (mobile drawer) -->
+  <div class="fib-backdrop" id="fibBackdrop" aria-hidden="true"></div>
+
   <!-- ═══════════════════════════════════════════════ FIB CALCULATOR -->
   <aside class="fib-calc" id="fibCalc">
     <div class="fib-calc-header">
       <span class="fib-calc-icon">◈</span>
       <h3 class="fib-calc-title">Fib Multi-Entry Calc</h3>
+      <button class="fib-close-btn" id="fibCloseBtn" aria-label="Close calculator">&#x2715;</button>
     </div>
 
     <div class="fib-calc-body">
@@ -617,6 +621,12 @@
   </aside>
 
   </main>
+
+  <!-- Mobile FAB — open Fib calculator -->
+  <button class="fib-fab" id="fibFab" aria-label="Open Fibonacci calculator">
+    <span class="fib-fab-icon">◈</span>
+    <span class="fib-fab-label">Calc</span>
+  </button>
 
   <!-- ═══════════════════════════════════════════════ ADD TRADE MODAL -->
   <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle" hidden>
