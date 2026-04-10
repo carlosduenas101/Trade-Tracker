@@ -1656,138 +1656,263 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 .fib-notch-icon { font-size: 0.9rem; line-height: 1; pointer-events: none; }
 
 /* ════════════════════════════════════════════════════════════
-   RESPONSIVE — TABLET / MOBILE
+   RESPONSIVE — MOBILE  ≤ 768 px
    ════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
 
-  /* Kill horizontal overflow globally */
-  html, body { overflow-x: hidden; max-width: 100%; }
+  /* ── 1. GLOBAL OVERFLOW GUARD ───────────────────────────── */
+  html { overflow-x: hidden; }
+  body { overflow-x: hidden; width: 100%; min-width: 0; }
 
-  /* ── Header ─────────────────────────────────────────────── */
-  .app-header { padding: 0 12px; height: 52px; gap: 8px; }
-  .theme-label { display: none; }
-  .lang-label  { display: none; }
-  .user-name   { display: none; }
+  /* Fix date inputs that have a hard min-width: 160px in base CSS */
+  input[type="date"].input-field,
+  input[type="datetime-local"].input-field {
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  /* ── 2. HEADER ──────────────────────────────────────────── */
+  .app-header {
+    padding: 0 12px;
+    height: 52px;
+    gap: 6px;
+  }
+  /* Left: shrink logo slightly */
+  .logo-img--header { height: 28px; }
+
+  /* Right: compress, prevent overflow */
+  .header-right {
+    gap: 6px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .theme-label,
+  .lang-label,
+  .user-name { display: none; }
   .connection-status .status-label { display: none; }
+  .theme-toggle,
+  .lang-toggle { padding: 5px 8px; }
+  #logoutBtn { padding: 5px 10px; font-size: 0.75rem; }
 
-  /* ── Main layout: single column, zero side offsets ───────── */
+  /* ── 3. MAIN LAYOUT — single column, full width ─────────── */
   .main-content {
     flex-direction: column;
     padding: 12px;
     gap: 12px;
+    width: 100%;
     max-width: 100%;
     box-sizing: border-box;
   }
-  .content-left { gap: 12px; }
+  .content-left {
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+  }
 
-  /* ── Toolbar: stacked rows ──────────────────────────────── */
+  /* ── 4. TOOLBAR ─────────────────────────────────────────── */
   .toolbar {
     flex-direction: column;
     align-items: stretch;
     padding: 12px;
+    gap: 8px;
+    width: 100%;
+  }
+
+  /* Date filter row: label | input | label | input on one line
+     Apply / Clear span across below                          */
+  .filter-group {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 6px 8px;
+    align-items: center;
+    width: 100%;
+  }
+  .filter-group .filter-label { white-space: nowrap; }
+  .filter-group .btn {
+    grid-column: span 2;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  /* Action buttons: 2-column grid, Add Trade full width */
+  .action-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+  .action-group .btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    justify-content: center;
+    font-size: 0.8rem;
+    padding: 8px 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .action-group .btn-primary {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  /* ── 5. SECTION HEADERS — allow wrapping ────────────────── */
+  .section-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* ── 6. METRICS CARDS ───────────────────────────────────── */
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
-  .filter-group {
-    flex-wrap: wrap;
-    width: 100%;
-    gap: 8px;
-  }
-  .filter-group input[type="date"].input-field {
-    flex: 1 1 120px;
-    min-width: 0;
-    width: auto;
-  }
-  .action-group {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    width: 100%;
-  }
-  .action-group .btn { justify-content: center; }
-  /* Add Trade gets full width */
-  .action-group .btn-primary { grid-column: 1 / -1; }
-  /* Hide the invisible file input from grid flow */
-  .action-group input[type="file"] { display: none; }
+  .metric-card { padding: 14px 16px; }
+  .metric-value { font-size: 1.3rem; }
 
-  /* ── Metrics: 2 columns ─────────────────────────────────── */
-  .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .metric-value { font-size: 1.4rem; }
-
-  /* ── Chart ──────────────────────────────────────────────── */
+  /* ── 7. P&L CHART ───────────────────────────────────────── */
   .chart-section { padding: 14px; }
-  .chart-wrapper { height: 200px; }
+  .chart-wrapper { height: 190px; }
+  .chart-legend { flex-wrap: wrap; gap: 6px; font-size: 0.72rem; }
 
-  /* ── Pool section ───────────────────────────────────────── */
+  /* ── 8. FUND POOL ───────────────────────────────────────── */
   .pool-section { padding: 14px; }
   .pool-summary { grid-template-columns: repeat(2, 1fr); }
-  .pool-add-row { flex-direction: column; gap: 8px; }
-  .pool-input-amt { max-width: 100%; }
-  .pool-chart-wrap { flex-direction: column; align-items: center; gap: 16px; }
-  .pool-pie-container { width: 240px; height: 240px; }
+  .pool-add-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pool-input,
+  .pool-input-amt {
+    max-width: 100%;
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  .pool-chart-wrap {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0 8px;
+  }
+  /* Clamp pie so it never exceeds viewport */
+  .pool-pie-container {
+    width: min(240px, calc(100vw - 56px));
+    height: min(240px, calc(100vw - 56px));
+  }
+  .pool-chart-legend {
+    width: 100%;
+    min-width: 0;
+  }
+  .pool-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-  /* ── Trades table ───────────────────────────────────────── */
+  /* ── 9. TRADES TABLE ────────────────────────────────────── */
   .table-section { padding: 14px; }
-  .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .table-filters { flex-direction: column; gap: 8px; align-items: stretch; }
-  .tf-dropdown { width: 100%; }
-  .tf-dropdown-btn { width: 100%; justify-content: space-between; }
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Table filters: vertical stack, full-width panels */
+  .table-filters {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+    padding: 10px 12px;
+  }
+  .tf-dropdown {
+    width: 100%;
+    position: relative; /* keep absolute panel scoped */
+  }
+  .tf-dropdown-btn {
+    width: 100%;
+    justify-content: space-between;
+    box-sizing: border-box;
+  }
+  /* Panel: clamp to parent width so it can't bleed off-screen */
+  .tf-panel {
+    left: 0;
+    right: 0;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
   .tf-group { width: 100%; }
   .tf-select { width: 100%; }
 
-  /* ── Modals: bottom sheet ───────────────────────────────── */
+  /* ── 10. MODALS — bottom sheet ──────────────────────────── */
   .modal {
     max-width: 100%;
+    width: 100%;
     margin: 0;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    max-height: 92vh;
+    max-height: 94vh;
+    box-sizing: border-box;
   }
   .modal-backdrop { align-items: flex-end; padding: 0; }
+  /* Stack form rows on mobile */
+  .form-row { grid-template-columns: 1fr; gap: 12px; }
 
-  /* ── Toasts ─────────────────────────────────────────────── */
+  /* ── 11. TOASTS ─────────────────────────────────────────── */
   .toast-container { bottom: 16px; right: 12px; left: 12px; }
   .toast { max-width: 100%; }
 
-  /* ── FIB CALCULATOR — fullscreen drawer from right ──────── */
+  /* ── 12. FIB CALCULATOR — drops from top-right under navbar ─ */
   .fib-calc {
     position: fixed;
-    top: 0;
+    top: 52px;            /* flush under the sticky header */
     right: 0;
-    bottom: 0;
     left: 0;
+    bottom: 0;
     width: 100%;
-    max-height: 100dvh;
+    max-height: calc(100dvh - 52px);
     z-index: 500;
     border-radius: 0;
     border: none;
-    border-left: 1px solid var(--border-default);
-    transform: translateX(100%);
+    border-top: 1px solid var(--border-default);
+    transform: translateX(100%);   /* slides in from the right */
     transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
   .fib-calc.calc-open { transform: translateX(0); }
 
-  /* Show backdrop and close button on mobile */
+  .fib-calc-header { padding: 16px; }
+  .fib-calc-body   { padding: 16px; gap: 14px; }
+  .fib-input       { padding: 10px; font-size: 0.9rem; }
+  .fib-toggle      { padding: 9px 4px; font-size: 0.78rem; }
+  .fib-calc-btn    { padding: 12px; font-size: 0.85rem; }
+
+  /* Show drawer chrome */
   .fib-backdrop { display: block; }
   .fib-close-btn { display: flex; }
-
-  /* Show notch pull-tab */
   .fib-notch { display: flex; }
-  /* Hide notch while drawer is open — × button takes over */
   .fib-notch.hidden { display: none; }
-
-  /* Calc body: use comfortable padding + larger touch targets */
-  .fib-calc-body { padding: 16px; gap: 14px; }
-  .fib-calc-btn { padding: 12px; font-size: 0.85rem; }
-  .fib-input { padding: 10px; font-size: 0.9rem; }
-  .fib-toggle { padding: 9px 4px; font-size: 0.78rem; }
-  .fib-calc-header { padding: 16px; }
 }
 
-@media (max-width: 400px) {
+/* ── SMALL SCREENS ≤ 480px ──────────────────────────────────── */
+@media (max-width: 480px) {
+  .app-header { padding: 0 10px; gap: 4px; }
+  .main-content { padding: 10px; gap: 10px; }
+  .toolbar { padding: 10px; }
+  /* Collapse filter-group to single column on very narrow screens */
+  .filter-group {
+    grid-template-columns: 1fr 1fr;
+  }
+  .filter-group .filter-label { display: none; } /* inputs have native placeholder */
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .metric-value { font-size: 1.15rem; }
+  .chart-wrapper { height: 170px; }
+}
+
+/* ── VERY SMALL ≤ 380px ─────────────────────────────────────── */
+@media (max-width: 380px) {
   .metrics-grid { grid-template-columns: 1fr; }
-  .pool-summary { grid-template-columns: 1fr; }
-  .app-header { padding: 0 10px; }
+  .pool-summary  { grid-template-columns: 1fr; }
+  .action-group .btn { flex: 1 1 100%; }
+  .action-group .btn-primary { flex: 1 1 100%; }
 }
 
 /* ════════════════════════════════════════════════════════════
