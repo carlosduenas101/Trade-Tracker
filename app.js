@@ -2441,26 +2441,27 @@ document.addEventListener('DOMContentLoaded', init);
 (function initCalcDrawer() {
   const calc     = document.getElementById('fibCalc');
   const backdrop = document.getElementById('fibBackdrop');
-  const fab      = document.getElementById('fibFab');
+  const notch    = document.getElementById('fibNotch');
   const closeBtn = document.getElementById('fibCloseBtn');
 
   function openCalc() {
     calc?.classList.add('calc-open');
     backdrop?.classList.add('active');
+    notch?.classList.add('hidden');
     document.body.style.overflow = 'hidden';
   }
 
   function closeCalc() {
     calc?.classList.remove('calc-open');
     backdrop?.classList.remove('active');
+    notch?.classList.remove('hidden');
     document.body.style.overflow = '';
   }
 
-  fab?.addEventListener('click', openCalc);
+  notch?.addEventListener('click', openCalc);
   closeBtn?.addEventListener('click', closeCalc);
   backdrop?.addEventListener('click', closeCalc);
 
-  // Close on Escape (unless a modal is open)
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && calc?.classList.contains('calc-open')) {
       e.stopPropagation();
@@ -2468,7 +2469,7 @@ document.addEventListener('DOMContentLoaded', init);
     }
   });
 
-  // Close drawer automatically when resizing back to desktop
+  // Restore on resize to desktop
   window.addEventListener('resize', () => {
     if (window.innerWidth > 768) closeCalc();
   });
