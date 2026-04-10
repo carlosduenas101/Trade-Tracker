@@ -1592,23 +1592,201 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 }
 
 /* ════════════════════════════════════════════════════════════
-   RESPONSIVE ADJUSTMENTS
+   FIB DRAWER — CLOSE BUTTON + FAB (always in DOM, shown mobile)
+   ════════════════════════════════════════════════════════════ */
+
+/* Close button inside the calc header — hidden on desktop */
+.fib-close-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  margin-left: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.fib-close-btn:hover { color: var(--red); border-color: var(--red-border); background: var(--red-dim); }
+
+/* Backdrop overlay — hidden on desktop */
+.fib-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 499;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.fib-backdrop.active { opacity: 1; pointer-events: all; }
+
+/* FAB — hidden on desktop */
+.fib-fab {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  z-index: 400;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 20px;
+  background: var(--accent-primary);
+  color: #000;
+  border: none;
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.45), 0 0 16px var(--accent-primary);
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+}
+.fib-fab:active { transform: scale(0.95); }
+.fib-fab-icon { font-size: 1.1rem; line-height: 1; }
+
+/* ════════════════════════════════════════════════════════════
+   RESPONSIVE — TABLET / MOBILE
    ════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .main-content { padding: 16px; gap: 16px; flex-direction: column; }
-  .fib-calc { width: 100%; position: static; }
-  .toolbar { padding: 12px 16px; }
-  .chart-section,
-  .table-section { padding: 16px; }
-  .modal { max-width: 100%; margin: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+
+  /* Kill horizontal overflow globally */
+  html, body { overflow-x: hidden; max-width: 100%; }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  .app-header { padding: 0 12px; height: 52px; gap: 8px; }
+  .theme-label { display: none; }
+  .lang-label  { display: none; }
+  .user-name   { display: none; }
+  .connection-status .status-label { display: none; }
+
+  /* ── Main layout: single column, zero side offsets ───────── */
+  .main-content {
+    flex-direction: column;
+    padding: 12px;
+    gap: 12px;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .content-left { gap: 12px; }
+
+  /* ── Toolbar: stacked rows ──────────────────────────────── */
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+    gap: 10px;
+  }
+  .filter-group {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 8px;
+  }
+  .filter-group input[type="date"].input-field {
+    flex: 1 1 120px;
+    min-width: 0;
+    width: auto;
+  }
+  .action-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .action-group .btn { justify-content: center; }
+  /* Add Trade gets full width */
+  .action-group .btn-primary { grid-column: 1 / -1; }
+  /* Hide the invisible file input from grid flow */
+  .action-group input[type="file"] { display: none; }
+
+  /* ── Metrics: 2 columns ─────────────────────────────────── */
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .metric-value { font-size: 1.4rem; }
+
+  /* ── Chart ──────────────────────────────────────────────── */
+  .chart-section { padding: 14px; }
+  .chart-wrapper { height: 200px; }
+
+  /* ── Pool section ───────────────────────────────────────── */
+  .pool-section { padding: 14px; }
+  .pool-summary { grid-template-columns: repeat(2, 1fr); }
+  .pool-add-row { flex-direction: column; gap: 8px; }
+  .pool-input-amt { max-width: 100%; }
+  .pool-chart-wrap { flex-direction: column; align-items: center; gap: 16px; }
+  .pool-pie-container { width: 240px; height: 240px; }
+
+  /* ── Trades table ───────────────────────────────────────── */
+  .table-section { padding: 14px; }
+  .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-filters { flex-direction: column; gap: 8px; align-items: stretch; }
+  .tf-dropdown { width: 100%; }
+  .tf-dropdown-btn { width: 100%; justify-content: space-between; }
+  .tf-group { width: 100%; }
+  .tf-select { width: 100%; }
+
+  /* ── Modals: bottom sheet ───────────────────────────────── */
+  .modal {
+    max-width: 100%;
+    margin: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-height: 92vh;
+  }
   .modal-backdrop { align-items: flex-end; padding: 0; }
-  .toast-container { bottom: 16px; right: 16px; left: 16px; }
+
+  /* ── Toasts: above FAB ──────────────────────────────────── */
+  .toast-container { bottom: 86px; right: 12px; left: 12px; }
   .toast { max-width: 100%; }
+
+  /* ── FIB CALCULATOR — fullscreen drawer from right ──────── */
+  .fib-calc {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;          /* full-width on mobile */
+    width: 100%;
+    max-height: 100%;
+    z-index: 500;
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--border-default);
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Remove desktop sticky/fixed sizing */
+    max-height: 100dvh;
+  }
+  .fib-calc.calc-open { transform: translateX(0); }
+
+  /* Show backdrop and close button on mobile */
+  .fib-backdrop { display: block; }
+  .fib-close-btn { display: flex; }
+
+  /* Show FAB */
+  .fib-fab { display: flex; }
+
+  /* Calc body: use comfortable padding + larger touch targets */
+  .fib-calc-body { padding: 16px; gap: 14px; }
+  .fib-calc-btn { padding: 12px; font-size: 0.85rem; }
+  .fib-input { padding: 10px; font-size: 0.9rem; }
+  .fib-toggle { padding: 9px 4px; font-size: 0.78rem; }
+  .fib-calc-header { padding: 16px; }
 }
 
-@media (max-width: 480px) {
-  .app-header { padding: 0 16px; }
-  .app-title  { font-size: 1rem; }
+@media (max-width: 400px) {
+  .metrics-grid { grid-template-columns: 1fr; }
+  .pool-summary { grid-template-columns: 1fr; }
+  .app-header { padding: 0 10px; }
 }
 
 /* ════════════════════════════════════════════════════════════
