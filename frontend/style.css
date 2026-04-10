@@ -1859,25 +1859,26 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   .toast-container { bottom: 16px; right: 12px; left: 12px; }
   .toast { max-width: 100%; }
 
-  /* ── 12. FIB CALCULATOR — drops from top-right under navbar ─ */
+  /* ── 12. FIB CALCULATOR — centered card, 10px under navbar ─ */
   .fib-calc {
     position: fixed;
-    top: 52px;            /* flush under the sticky header */
-    right: 0;
-    left: 0;
-    bottom: 0;
-    width: 100%;
-    max-height: calc(100dvh - 52px);
+    top: 62px;                              /* 52px header + 10px gap */
+    left: 50%;                              /* anchor at horizontal center */
+    width: min(420px, calc(100vw - 24px));  /* card width, never overflows */
+    max-height: calc(100dvh - 82px);        /* fill most of viewport below */
+    bottom: auto;
     z-index: 500;
-    border-radius: 0;
-    border: none;
-    border-top: 1px solid var(--border-default);
-    transform: translateX(100%);   /* slides in from the right */
-    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-default);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px var(--border-subtle);
+    /* OFF-SCREEN: pushed to the right (left:50% + large translateX = off-right) */
+    transform: translateX(100vw);
+    transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  .fib-calc.calc-open { transform: translateX(0); }
+  /* OPEN: slide to centered position */
+  .fib-calc.calc-open { transform: translateX(-50%); }
 
   .fib-calc-header { padding: 16px; }
   .fib-calc-body   { padding: 16px; gap: 14px; }
