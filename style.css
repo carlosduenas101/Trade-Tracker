@@ -1859,25 +1859,26 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   .toast-container { bottom: 16px; right: 12px; left: 12px; }
   .toast { max-width: 100%; }
 
-  /* ── 12. FIB CALCULATOR — centered card, 10px under navbar ─ */
+  /* ── 12. FIB CALCULATOR — centered card, 10px under navbar ─
+     !important needed: the base .fib-calc rule sits later in the
+     file (line ~1922) and would otherwise override this block.   */
   .fib-calc {
-    position: fixed;
-    top: 62px;                              /* 52px header + 10px gap */
-    left: 50%;                              /* anchor at horizontal center */
-    width: min(420px, calc(100vw - 24px));  /* card width, never overflows */
-    max-height: calc(100dvh - 82px);        /* fill most of viewport below */
-    bottom: auto;
+    position: fixed !important;
+    top: 62px !important;
+    left: 50% !important;
+    width: min(420px, calc(100vw - 24px)) !important;
+    max-height: calc(100dvh - 82px) !important;
+    bottom: auto !important;
+    flex-shrink: 0;
     z-index: 500;
-    border-radius: var(--radius-xl);
-    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xl) !important;
+    border: 1px solid var(--border-default) !important;
     box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px var(--border-subtle);
-    /* OFF-SCREEN: pushed to the right (left:50% + large translateX = off-right) */
     transform: translateX(100vw);
     transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  /* OPEN: slide to centered position */
   .fib-calc.calc-open { transform: translateX(-50%); }
 
   .fib-calc-header { padding: 16px; }
