@@ -431,93 +431,44 @@
 
       <!-- Inputs -->
       <div class="fib-field">
-        <label class="fib-label">Currency Pair</label>
-        <select class="fib-input fib-select" id="fcPair">
-          <optgroup label="── Bitcoin">
-            <option value="BTC/USDT">BTC/USDT</option>
-            <option value="BTC/USDC">BTC/USDC</option>
-          </optgroup>
-          <optgroup label="── Ethereum">
-            <option value="ETH/USDT">ETH/USDT</option>
-            <option value="ETH/USDC">ETH/USDC</option>
-            <option value="ETH/BTC">ETH/BTC</option>
-          </optgroup>
-          <optgroup label="── Large Cap">
-            <option value="SOL/USDT">SOL/USDT</option>
-            <option value="BNB/USDT">BNB/USDT</option>
-            <option value="XRP/USDT">XRP/USDT</option>
-            <option value="ADA/USDT">ADA/USDT</option>
-            <option value="AVAX/USDT">AVAX/USDT</option>
-            <option value="DOGE/USDT">DOGE/USDT</option>
-            <option value="DOT/USDT">DOT/USDT</option>
-            <option value="LTC/USDT">LTC/USDT</option>
-            <option value="LINK/USDT">LINK/USDT</option>
-            <option value="BCH/USDT">BCH/USDT</option>
-          </optgroup>
-          <optgroup label="── Mid Cap">
-            <option value="SUI/USDT">SUI/USDT</option>
-            <option value="APT/USDT">APT/USDT</option>
-            <option value="ARB/USDT">ARB/USDT</option>
-            <option value="OP/USDT">OP/USDT</option>
-            <option value="INJ/USDT">INJ/USDT</option>
-            <option value="TIA/USDT">TIA/USDT</option>
-            <option value="MATIC/USDT">MATIC/USDT</option>
-            <option value="ATOM/USDT">ATOM/USDT</option>
-            <option value="NEAR/USDT">NEAR/USDT</option>
-            <option value="FTM/USDT">FTM/USDT</option>
-            <option value="SEI/USDT">SEI/USDT</option>
-            <option value="WIF/USDT">WIF/USDT</option>
-            <option value="PEPE/USDT">PEPE/USDT</option>
-            <option value="HBAR/USDT">HBAR/USDT</option>
-          </optgroup>
-          <optgroup label="── Forex">
-            <option value="EUR/USD">EUR/USD</option>
-            <option value="GBP/USD">GBP/USD</option>
-            <option value="USD/JPY">USD/JPY</option>
-            <option value="USD/CHF">USD/CHF</option>
-            <option value="AUD/USD">AUD/USD</option>
-            <option value="USD/CAD">USD/CAD</option>
-          </optgroup>
-          <optgroup label="── Commodities">
-            <option value="XAU/USD">XAU/USD (Gold)</option>
-            <option value="XAG/USD">XAG/USD (Silver)</option>
-            <option value="WTI/USD">WTI/USD (Oil)</option>
-          </optgroup>
-        </select>
-      </div>
-
-      <div class="fib-field">
         <label class="fib-label">Account Size ($)</label>
         <input class="fib-input" type="number" id="fcAccount" placeholder="10,000" min="0" step="any" />
       </div>
 
       <div class="fib-field">
-        <label class="fib-label">Simultaneous Trades</label>
-        <div class="fib-toggle-group">
-          <button class="fib-toggle active" data-trades="1">1 Trade</button>
-          <button class="fib-toggle" data-trades="2">2 Trades</button>
+        <div class="fib-lev-header">
+          <label class="fib-label">Leverage</label>
+          <span class="fib-lev-val" id="fcLeverageDisplay">6×</span>
+        </div>
+        <div class="fib-lev-row">
+          <button class="fib-lev-btn" id="fcLevMinus" aria-label="Decrease leverage">−</button>
+          <input class="fib-lev-slider" type="range" id="fcLeverage" min="1" max="125" step="1" value="6" />
+          <button class="fib-lev-btn" id="fcLevPlus" aria-label="Increase leverage">+</button>
         </div>
       </div>
 
       <div class="fib-field">
-        <label class="fib-label">Direction</label>
-        <div class="fib-toggle-group">
-          <button class="fib-toggle active" data-dir="long">▲ Long</button>
-          <button class="fib-toggle" data-dir="short">▼ Short</button>
+        <div class="fib-lev-header">
+          <label class="fib-label">Simultaneous Trades</label>
+          <span class="fib-lev-val" id="fcTradesDisplay">1 Trade</span>
+        </div>
+        <div class="fib-lev-row">
+          <button class="fib-lev-btn" id="fcTradesMinus" aria-label="Decrease trades">−</button>
+          <input class="fib-lev-slider" type="range" id="fcTrades" min="1" max="5" step="1" value="1" />
+          <button class="fib-lev-btn" id="fcTradesPlus" aria-label="Increase trades">+</button>
         </div>
       </div>
 
-      <div class="fib-field">
-        <label class="fib-label">E1 Entry Price</label>
-        <input class="fib-input" type="number" id="fcE1" placeholder="0.00" min="0" step="any" />
-      </div>
+      <!-- Per-trade input slots (populated by JS) -->
+      <div id="fcTradeSlots" class="fib-trade-slots"></div>
 
       <button class="btn btn-primary fib-calc-btn" id="fibCalcBtn">Calculate</button>
 
+      <!-- Warning banner — shown independently of results -->
+      <div class="fib-warning" id="frWarning" hidden></div>
+
       <!-- Results -->
       <div class="fib-results" id="fibResults" hidden>
-
-        <div class="fib-pair-badge" id="frPairBadge"></div>
 
         <!-- Account Summary -->
         <div class="fib-section-title">Account Overview</div>
@@ -544,74 +495,28 @@
           </div>
           <div class="fib-row">
             <span class="fib-key">Leverage</span>
-            <span class="fib-val fib-accent">6×</span>
+            <span class="fib-val fib-accent" id="frLeverage">—</span>
           </div>
         </div>
 
-        <!-- Entry Prices -->
-        <div class="fib-section-title">Entry Structure</div>
-        <div class="fib-grid">
-          <div class="fib-row">
-            <span class="fib-key fib-e1">E1</span>
-            <span class="fib-val" id="frE1">—</span>
-          </div>
-          <div class="fib-row">
-            <span class="fib-key fib-e2">E2 <span class="fib-pct">±1.618%</span></span>
-            <span class="fib-val" id="frE2">—</span>
-          </div>
-          <div class="fib-row">
-            <span class="fib-key fib-e3">E3 <span class="fib-pct">±2.618%</span></span>
-            <span class="fib-val" id="frE3">—</span>
-          </div>
-          <div class="fib-row">
-            <span class="fib-key fib-e4">E4 <span class="fib-pct">±3.618%</span></span>
-            <span class="fib-val" id="frE4">—</span>
-          </div>
-          <div class="fib-row fib-divider">
-            <span class="fib-key">Weighted Avg Entry</span>
-            <span class="fib-val fib-accent" id="frWavg">—</span>
-          </div>
-          <div class="fib-row">
-            <span class="fib-key fib-sl">Stop Loss <span class="fib-pct">±3.70%</span></span>
-            <span class="fib-val fib-red" id="frSL">—</span>
-          </div>
-          <div class="fib-row">
-            <span class="fib-key fib-tp">Take Profit <span class="fib-pct">±5%</span></span>
-            <span class="fib-val fib-green" id="frTP">—</span>
-          </div>
-        </div>
-
-        <!-- Capital Allocation Table -->
-        <div class="fib-section-title">Capital Allocation</div>
-        <table class="fib-table">
-          <thead>
-            <tr>
-              <th>Entry</th>
-              <th>Alloc</th>
-              <th>Capital $</th>
-              <th>Exposure $</th>
-            </tr>
-          </thead>
-          <tbody id="frAllocBody"></tbody>
-          <tfoot>
-            <tr class="fib-table-total">
-              <td colspan="2">Total</td>
-              <td id="frTotalCap">—</td>
-              <td id="frTotalExp">—</td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <!-- SL Verification -->
+        <!-- Verification -->
+        <div class="fib-section-title">Verification</div>
         <div class="fib-sl-verify" id="frVerify">
-          <div class="fib-verify-label">SL Verification</div>
           <div class="fib-verify-row">
-            <span>Actual loss at SL</span>
+            <span>SL · Capital × Lev × 3.70%</span>
             <span id="frActualLoss">—</span>
           </div>
           <div class="fib-verify-row">
-            <span>Max allowed (10%)</span>
+            <span>= Max loss / trade (10% ÷ trades)</span>
             <span id="frMaxAllowed">—</span>
+          </div>
+          <div class="fib-verify-row fib-verify-divider">
+            <span>Deployed · Capital ≤ 45% ÷ trades</span>
+            <span id="frDeployedCheck">—</span>
+          </div>
+          <div class="fib-verify-row">
+            <span>Risk · Total loss ≤ 10% of account</span>
+            <span id="frRiskCheck">—</span>
           </div>
           <div class="fib-verify-badge" id="frBadge">—</div>
         </div>
