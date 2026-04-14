@@ -109,13 +109,13 @@
   --accent-primary: #7b2fff;
   --accent-hover:   #9d52ff;
 
-  --green:          #7b2fff;
-  --green-dim:      rgba(123, 47, 255, 0.13);
-  --green-border:   rgba(123, 47, 255, 0.38);
+  --green:          #00e5ff;
+  --green-dim:      rgba(0, 229, 255, 0.13);
+  --green-border:   rgba(0, 229, 255, 0.38);
 
-  --red:            #e040fb;
-  --red-dim:        rgba(224, 64, 251, 0.13);
-  --red-border:     rgba(224, 64, 251, 0.38);
+  --red:            #c030ff;
+  --red-dim:        rgba(192, 48, 255, 0.13);
+  --red-border:     rgba(192, 48, 255, 0.38);
 
   --yellow:         #c084fc;
   --yellow-dim:     rgba(192, 132, 252, 0.13);
@@ -2198,6 +2198,187 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   background: rgba(255,23,68,0.12);
   color: var(--red);
   border: 1px solid rgba(255,23,68,0.35);
+}
+
+/* Leverage slider */
+.fib-lev-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.fib-lev-val {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent-primary);
+  min-width: 36px;
+  text-align: right;
+}
+.fib-lev-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fib-lev-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  color: var(--accent-primary);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.fib-lev-btn:hover  { background: var(--accent-dim); border-color: var(--accent-primary); }
+.fib-lev-btn:active { background: var(--accent-primary); color: #000; }
+
+/* Range slider track + thumb */
+.fib-lev-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-default);
+  outline: none;
+  cursor: pointer;
+}
+.fib-lev-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 6px var(--accent-primary);
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.fib-lev-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 6px var(--accent-primary);
+  cursor: pointer;
+}
+.fib-lev-slider:hover::-webkit-slider-thumb { box-shadow: 0 0 10px var(--accent-primary); }
+.fib-lev-slider:hover::-moz-range-thumb     { box-shadow: 0 0 10px var(--accent-primary); }
+
+/* Warning banner */
+.fib-warning {
+  background: rgba(255, 180, 0, 0.10);
+  border: 1px solid rgba(255, 180, 0, 0.40);
+  border-radius: var(--radius-sm);
+  color: #ffb400;
+  font-size: 0.69rem;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
+
+/* Inline verification check marks */
+.fib-check-ok   { color: var(--green); font-weight: 700; }
+.fib-check-fail { color: var(--red);   font-weight: 700; font-size: 0.66rem; }
+
+/* ── Trade input slots ──────────────────────────────────── */
+.fib-trade-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fib-trade-slot {
+  --trade-color: var(--accent-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--trade-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 10px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.fib-trade-slot-header { display: flex; align-items: center; }
+.fib-trade-slot-num {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--trade-color);
+}
+.fib-slot-dir-group { margin: 0; }
+
+/* Inline result that expands inside the slot */
+.fib-slot-result {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+.fib-slot-result-title {
+  margin-top: 0 !important;
+  color: var(--trade-color) !important;
+}
+
+/* ── Trade result cards ─────────────────────────────────── */
+.fib-trade-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+.fib-trade-card {
+  --trade-color: var(--accent-primary);
+  border: 1px solid var(--border-default);
+  border-top: 2px solid var(--trade-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.fib-trade-card-header {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fib-trade-card-num {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--trade-color);
+  flex-shrink: 0;
+}
+.fib-trade-card-pair {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+.fib-trade-card-dir {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.fib-trade-card-dir.long  { background: rgba(57,255,20,0.12); color: var(--green); }
+.fib-trade-card-dir.short { background: rgba(255,23,68,0.12); color: var(--red);   }
+.fib-trade-card-body { padding: 8px 10px; }
+.fib-card-section { margin-top: 0 !important; }
+
+/* Divider row inside verify block */
+.fib-verify-divider {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 5px;
+  margin-top: 3px;
 }
 
 /* ════════════════════════════════════════════════════════════

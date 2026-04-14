@@ -48,6 +48,10 @@ function applyTheme(theme) {
     const img = document.getElementById(id);
     if (img) img.src = logo;
   });
+  // Re-render the P&L chart so theme-aware colours apply immediately
+  if (typeof renderChart === 'function' && state?.trades) {
+    renderChart(applyTableFilters ? applyTableFilters(state.trades) : state.trades);
+  }
 }
 
 function toggleTheme() {
@@ -158,7 +162,7 @@ function initBgCanvas() {
   function themeColors() {
     const t = document.documentElement.getAttribute('data-theme');
     if (t === 'blossom') return { up: '#9b5de5', down: '#ff85a1' };
-    if (t === 'purple')  return { up: '#7b2fff', down: '#e040fb' };
+    if (t === 'purple')  return { up: '#00e5ff', down: '#c030ff' };
     return { up: '#39ff14', down: '#ff1744' };
   }
 
@@ -286,8 +290,8 @@ function initLoginCanvas() {
       c2: '#ff85a1', fa2: 'rgba(255,133,161,0.22)', fb2: 'rgba(255,133,161,0)',
     };
     if (t === 'purple') return {
-      c1: '#7b2fff', fa1: 'rgba(123,47,255,0.25)', fb1: 'rgba(123,47,255,0)',
-      c2: '#e040fb', fa2: 'rgba(224,64,251,0.10)', fb2: 'rgba(224,64,251,0)',
+      c1: '#00e5ff', fa1: 'rgba(0,229,255,0.25)',   fb1: 'rgba(0,229,255,0)',
+      c2: '#c030ff', fa2: 'rgba(192,48,255,0.10)',   fb2: 'rgba(192,48,255,0)',
     };
     return {
       c1: '#39ff14', fa1: 'rgba(57,255,20,0.18)',  fb1: 'rgba(57,255,20,0)',
@@ -1269,7 +1273,7 @@ function renderChart(trades) {
   // Theme-aware chart colours
   const _chartTheme = document.documentElement.getAttribute('data-theme');
   const _chartColors = _chartTheme === 'purple'
-    ? { win: '#00e5ff', winRgb: '0, 229, 255', loss: '#e040fb', lossRgb: '224, 64, 251' }
+    ? { win: '#00e5ff', winRgb: '0, 229, 255', loss: '#c030ff', lossRgb: '192, 48, 255' }
     : { win: '#00c853', winRgb: '0, 200, 83',  loss: '#ff1744', lossRgb: '255, 23, 68'  };
 
   // Sort by close_time asc, build cumulative P&L
@@ -2059,120 +2063,309 @@ document.addEventListener('DOMContentLoaded', init);
 (function initFibCalc() {
   const $ = (id) => document.getElementById(id);
 
-  // ── Toggle groups ──────────────────────────────────────────
-  document.querySelectorAll('.fib-toggle[data-trades]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.fib-toggle[data-trades]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+  const TRADE_COLORS = ['#39ff14', '#7ab8ff', '#c17aff', '#ffb400', '#ff7a7a'];
+  const ENTRY_COLORS = ['#39ff14', '#7affcc', '#7ab8ff', '#c17aff'];
+  const PCTS         = [0.15, 0.225, 0.30, 0.325];
+
+  const PAIR_OPTIONS = `
+    <optgroup label="── Bitcoin">
+      <option value="BTC/USDT">BTC/USDT</option>
+      <option value="BTC/USDC">BTC/USDC</option>
+    </optgroup>
+    <optgroup label="── Ethereum">
+      <option value="ETH/USDT">ETH/USDT</option>
+      <option value="ETH/USDC">ETH/USDC</option>
+      <option value="ETH/BTC">ETH/BTC</option>
+    </optgroup>
+    <optgroup label="── Large Cap">
+      <option value="SOL/USDT">SOL/USDT</option>
+      <option value="BNB/USDT">BNB/USDT</option>
+      <option value="XRP/USDT">XRP/USDT</option>
+      <option value="ADA/USDT">ADA/USDT</option>
+      <option value="AVAX/USDT">AVAX/USDT</option>
+      <option value="DOGE/USDT">DOGE/USDT</option>
+      <option value="DOT/USDT">DOT/USDT</option>
+      <option value="LTC/USDT">LTC/USDT</option>
+      <option value="LINK/USDT">LINK/USDT</option>
+      <option value="BCH/USDT">BCH/USDT</option>
+    </optgroup>
+    <optgroup label="── Mid Cap">
+      <option value="SUI/USDT">SUI/USDT</option>
+      <option value="APT/USDT">APT/USDT</option>
+      <option value="ARB/USDT">ARB/USDT</option>
+      <option value="OP/USDT">OP/USDT</option>
+      <option value="INJ/USDT">INJ/USDT</option>
+      <option value="TIA/USDT">TIA/USDT</option>
+      <option value="MATIC/USDT">MATIC/USDT</option>
+      <option value="ATOM/USDT">ATOM/USDT</option>
+      <option value="NEAR/USDT">NEAR/USDT</option>
+      <option value="FTM/USDT">FTM/USDT</option>
+      <option value="SEI/USDT">SEI/USDT</option>
+      <option value="WIF/USDT">WIF/USDT</option>
+      <option value="PEPE/USDT">PEPE/USDT</option>
+      <option value="HBAR/USDT">HBAR/USDT</option>
+    </optgroup>
+    <optgroup label="── Forex">
+      <option value="EUR/USD">EUR/USD</option>
+      <option value="GBP/USD">GBP/USD</option>
+      <option value="USD/JPY">USD/JPY</option>
+      <option value="USD/CHF">USD/CHF</option>
+      <option value="AUD/USD">AUD/USD</option>
+      <option value="USD/CAD">USD/CAD</option>
+    </optgroup>
+    <optgroup label="── Commodities">
+      <option value="XAU/USD">XAU/USD (Gold)</option>
+      <option value="XAG/USD">XAG/USD (Silver)</option>
+      <option value="WTI/USD">WTI/USD (Oil)</option>
+    </optgroup>`;
+
+  // ── Render per-trade INPUT slots ───────────────────────────
+  function renderTradeSlots() {
+    const n       = parseInt($('fcTrades').value);
+    const slotsEl = $('fcTradeSlots');
+    // Preserve existing E1 values & pair selections across re-renders
+    const prev = [];
+    slotsEl.querySelectorAll('.fib-trade-slot').forEach((el, i) => {
+      prev[i] = {
+        pair: el.querySelector('.fib-slot-pair')?.value || 'BTC/USDT',
+        dir:  el.querySelector('.fib-toggle[data-dir].active')?.dataset.dir || 'long',
+        e1:   el.querySelector('.fib-slot-e1')?.value || '',
+      };
     });
-  });
-  document.querySelectorAll('.fib-toggle[data-dir]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.fib-toggle[data-dir]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
 
-  // ── Calculate ──────────────────────────────────────────────
-  $('fibCalcBtn').addEventListener('click', () => {
-    const pair      = $('fcPair').value;
-    const account   = parseFloat($('fcAccount').value);
-    const e1Price   = parseFloat($('fcE1').value);
-    const numTrades = parseInt(document.querySelector('.fib-toggle[data-trades].active')?.dataset.trades || '1');
-    const direction = document.querySelector('.fib-toggle[data-dir].active')?.dataset.dir || 'long';
+    slotsEl.innerHTML = '';
+    for (let i = 0; i < n; i++) {
+      const color = TRADE_COLORS[i] || '#39ff14';
+      const saved = prev[i] || {};
+      const slot  = document.createElement('div');
+      slot.className = 'fib-trade-slot';
+      slot.style.setProperty('--trade-color', color);
+      slot.innerHTML = `
+        <div class="fib-trade-slot-header">
+          <span class="fib-trade-slot-num">Trade ${i + 1}</span>
+        </div>
+        <select class="fib-input fib-select fib-slot-pair" aria-label="Pair for trade ${i + 1}">
+          ${PAIR_OPTIONS}
+        </select>
+        <div class="fib-toggle-group fib-slot-dir-group">
+          <button class="fib-toggle${saved.dir !== 'short' ? ' active' : ''}" data-dir="long">▲ Long</button>
+          <button class="fib-toggle${saved.dir === 'short' ? ' active' : ''}" data-dir="short">▼ Short</button>
+        </div>
+        <input class="fib-input fib-slot-e1" type="number"
+               placeholder="E1 Entry Price" min="0" step="any"
+               value="${saved.e1 || ''}" />
+        <div class="fib-slot-result" hidden></div>`;
 
-    if (!account || account <= 0 || !e1Price || e1Price <= 0) return;
+      // Restore pair selection
+      if (saved.pair) slot.querySelector('.fib-slot-pair').value = saved.pair;
 
-    const isLong   = direction === 'long';
-    const s        = isLong ? -1 : 1;   // -1 = subtract (long), +1 = add (short)
-    const leverage = 6;
+      // Wire direction toggles
+      slot.querySelectorAll('.fib-toggle[data-dir]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          slot.querySelectorAll('.fib-toggle[data-dir]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
 
-    // Account rules
-    const deployed       = account * 0.45;
-    const reserve        = account * 0.55;
-    const maxLoss        = account * 0.10;
-    const tradeCap       = deployed / numTrades;
-    const maxLossPerTrade = maxLoss / numTrades;
+      // Enter key on E1 triggers calculate
+      slot.querySelector('.fib-slot-e1').addEventListener('keydown', e => {
+        if (e.key === 'Enter') $('fibCalcBtn').click();
+      });
 
-    // Entry prices
-    const e1 = e1Price;
-    const e2 = e1 * (1 + s * 0.01618);
-    const e3 = e2 * (1 + s * 0.02618);
-    const e4 = e3 * (1 + s * 0.03618);
-    const sl = e4 * (1 + s * 0.0370);
+      slotsEl.appendChild(slot);
+    }
+  }
 
-    // Capital split per entry (% of trade capital)
-    const pcts    = [0.15, 0.225, 0.30, 0.325];
-    const entries = [e1, e2, e3, e4];
-    const labels  = ['E1', 'E2', 'E3', 'E4'];
-    const capitals  = pcts.map(p => tradeCap * p);
+  // ── Build inline result HTML for one trade slot ────────────
+  function tradeResultHTML(isLong, e1Price, tradeCap, leverage) {
+    const s    = isLong ? -1 : 1;
+    const fmt  = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtP = (n)        => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
+
+    const e1   = e1Price;
+    const e2   = e1 * (1 + s * 0.01618);
+    const e3   = e2 * (1 + s * 0.02618);
+    const e4   = e3 * (1 + s * 0.03618);
+    const sl   = e4 * (1 + s * 0.0370);
+    const wavg = e1*PCTS[0] + e2*PCTS[1] + e3*PCTS[2] + e4*PCTS[3];
+    const tp   = isLong ? wavg * 1.05 : wavg * 0.95;
+
+    const capitals  = PCTS.map(p => tradeCap * p);
     const exposures = capitals.map(c => c * leverage);
     const totalCap  = capitals.reduce((a, b) => a + b, 0);
     const totalExp  = exposures.reduce((a, b) => a + b, 0);
 
-    // Weighted average entry (pcts already sum to 1.0)
-    const wavg = entries.reduce((sum, e, i) => sum + e * pcts[i], 0);
+    const allocRows = ['E1','E2','E3','E4'].map((lbl, j) => `
+      <tr>
+        <td style="color:${ENTRY_COLORS[j]}">${lbl}</td>
+        <td>${(PCTS[j] * 100).toFixed(1)}%</td>
+        <td>${fmt(capitals[j])}</td>
+        <td>${fmt(exposures[j])}</td>
+      </tr>`).join('');
 
-    // Take profit: 5% from wavg
-    const tp = isLong ? wavg * 1.05 : wavg * 0.95;
+    return `
+      <div class="fib-section-title fib-slot-result-title">Entry Structure</div>
+      <div class="fib-grid">
+        <div class="fib-row"><span class="fib-key fib-e1">E1</span><span class="fib-val">${fmtP(e1)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-e2">E2 <span class="fib-pct">−1.618%</span></span><span class="fib-val">${fmtP(e2)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-e3">E3 <span class="fib-pct">−2.618%</span></span><span class="fib-val">${fmtP(e3)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-e4">E4 <span class="fib-pct">−3.618%</span></span><span class="fib-val">${fmtP(e4)}</span></div>
+        <div class="fib-row fib-divider"><span class="fib-key">Weighted Avg</span><span class="fib-val fib-accent">${fmtP(wavg)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-sl">Stop Loss <span class="fib-pct">−3.70%</span></span><span class="fib-val fib-red">${fmtP(sl)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-tp">Take Profit <span class="fib-pct">+5%</span></span><span class="fib-val fib-green">${fmtP(tp)}</span></div>
+      </div>
+      <div class="fib-section-title fib-slot-result-title">Capital Allocation</div>
+      <table class="fib-table">
+        <thead><tr><th>Entry</th><th>Alloc</th><th>Capital</th><th>Exposure</th></tr></thead>
+        <tbody>${allocRows}</tbody>
+        <tfoot>
+          <tr class="fib-table-total">
+            <td colspan="2">Total</td>
+            <td>${fmt(totalCap)}</td>
+            <td>${fmt(totalExp)}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+  }
 
-    // SL verification: tradeCap × leverage × 3.70%
-    const actualLossPerTrade = tradeCap * leverage * 0.0370;
-    const totalActualLoss    = actualLossPerTrade * numTrades;
-    const slPass = totalActualLoss <= maxLoss + 0.01;
+  // ── Leverage slider ────────────────────────────────────────
+  const levSlider  = $('fcLeverage');
+  const levDisplay = $('fcLeverageDisplay');
 
-    // ── Render ─────────────────────────────────────────────
-    const fmt  = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-    const fmtP = (n, d = 5) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: d });
+  function updateLevDisplay() {
+    levDisplay.textContent = levSlider.value + '×';
+    const pct = ((levSlider.value - 1) / (125 - 1)) * 100;
+    levSlider.style.background =
+      `linear-gradient(to right, var(--accent-primary) ${pct}%, var(--border-default) ${pct}%)`;
+  }
+  levSlider.addEventListener('input', updateLevDisplay);
+  updateLevDisplay();
+  $('fcLevMinus').addEventListener('click', () => { levSlider.value = Math.max(1,   parseInt(levSlider.value) - 1); updateLevDisplay(); });
+  $('fcLevPlus' ).addEventListener('click', () => { levSlider.value = Math.min(125, parseInt(levSlider.value) + 1); updateLevDisplay(); });
 
-    $('frPairBadge').textContent  = pair;
+  // ── Trades slider ──────────────────────────────────────────
+  const tradesSlider  = $('fcTrades');
+  const tradesDisplay = $('fcTradesDisplay');
+
+  function updateTradesDisplay() {
+    const v = parseInt(tradesSlider.value);
+    tradesDisplay.textContent = v + (v === 1 ? ' Trade' : ' Trades');
+    const pct = ((v - 1) / (5 - 1)) * 100;
+    tradesSlider.style.background =
+      `linear-gradient(to right, var(--accent-primary) ${pct}%, var(--border-default) ${pct}%)`;
+    renderTradeSlots();
+  }
+  tradesSlider.addEventListener('input', updateTradesDisplay);
+  $('fcTradesMinus').addEventListener('click', () => { tradesSlider.value = Math.max(1, parseInt(tradesSlider.value) - 1); updateTradesDisplay(); });
+  $('fcTradesPlus' ).addEventListener('click', () => { tradesSlider.value = Math.min(5, parseInt(tradesSlider.value) + 1); updateTradesDisplay(); });
+
+  // Init on load
+  updateTradesDisplay();
+
+  // ── Calculate ──────────────────────────────────────────────
+  $('fibCalcBtn').addEventListener('click', () => {
+    const account   = parseFloat($('fcAccount').value);
+    const leverage  = parseInt($('fcLeverage').value);
+    const numTrades = parseInt($('fcTrades').value);
+
+    const fmt = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+    // ── Input validation ───────────────────────────────────
+    if (!account || account <= 0) return;
+    if (!leverage || leverage < 1 || leverage > 125) {
+      $('frWarning').textContent = '⚠ Leverage must be an integer between 1× and 125×.';
+      $('frWarning').hidden = false;
+      return;
+    }
+
+    // Read per-trade inputs — skip slots without an E1 price
+    const slots = $('fcTradeSlots').querySelectorAll('.fib-trade-slot');
+    const tradeInputs = [];
+    slots.forEach(slot => {
+      const e1Price = parseFloat(slot.querySelector('.fib-slot-e1')?.value);
+      const resultEl = slot.querySelector('.fib-slot-result');
+      if (!e1Price || e1Price <= 0) {
+        // Clear any stale result from a previous calculation
+        if (resultEl) { resultEl.innerHTML = ''; resultEl.hidden = true; }
+        return;
+      }
+      tradeInputs.push({
+        pair:  slot.querySelector('.fib-slot-pair')?.value || 'BTC/USDT',
+        dir:   slot.querySelector('.fib-toggle[data-dir].active')?.dataset.dir || 'long',
+        e1Price,
+        resultEl,
+      });
+    });
+    if (!tradeInputs.length) return; // nothing to calculate
+
+    $('frWarning').hidden = true;
+
+    // ── Account rules ──────────────────────────────────────
+    const deployed        = account * 0.45;
+    const reserve         = account * 0.55;
+    const maxLoss         = account * 0.10;
+    const maxLossPerTrade = maxLoss / numTrades;
+    const maxCapPerTrade  = deployed / numTrades;
+    const tradeCap        = maxLossPerTrade / (leverage * 0.0370);
+
+    // ── Verifications ──────────────────────────────────────
+    const slCheckVal   = tradeCap * leverage * 0.0370;
+    const deployedPass = tradeCap <= maxCapPerTrade * 1.005;
+    const totalLoss    = slCheckVal * numTrades;
+    const riskPass     = totalLoss <= maxLoss + 0.01;
+
+    // ── Warning banner ─────────────────────────────────────
+    const warnings = [];
+    if (!deployedPass) {
+      const minLev = Math.ceil(maxLossPerTrade / (maxCapPerTrade * 0.0370));
+      warnings.push(`Leverage too low: required capital (${fmt(tradeCap)}) exceeds max deployable (${fmt(maxCapPerTrade)}). Increase to at least <strong>${minLev}×</strong>.`);
+    }
+    if (!riskPass) {
+      warnings.push(`Total risk at SL (${fmt(totalLoss)}) exceeds 10% account cap (${fmt(maxLoss)}).`);
+    }
+    const warnEl = $('frWarning');
+    if (warnings.length > 0) {
+      warnEl.innerHTML = warnings.map(w => `⚠ ${w}`).join('<br>');
+      warnEl.hidden = false;
+    } else {
+      warnEl.hidden = true;
+    }
+
+    // ── Account summary ────────────────────────────────────
+    $('frLeverage').textContent   = leverage + '×';
     $('frDeployed').textContent   = fmt(deployed);
     $('frTradeCap').textContent   = fmt(tradeCap) + (numTrades > 1 ? ` ×${numTrades}` : '');
     $('frReserve').textContent    = fmt(reserve);
     $('frMaxLoss').textContent    = fmt(maxLoss);
     $('frMaxLossPer').textContent = fmt(maxLossPerTrade);
 
-    $('frE1').textContent   = fmtP(e1);
-    $('frE2').textContent   = fmtP(e2);
-    $('frE3').textContent   = fmtP(e3);
-    $('frE4').textContent   = fmtP(e4);
-    $('frSL').textContent   = fmtP(sl);
-    $('frWavg').textContent = fmtP(wavg);
-    $('frTP').textContent   = fmtP(tp);
+    // ── Inject results inline into each completed trade slot ─
+    tradeInputs.forEach(t => {
+      if (!t.resultEl) return;
+      t.resultEl.innerHTML = tradeResultHTML(t.dir === 'long', t.e1Price, tradeCap, leverage);
+      t.resultEl.hidden = false;
+    });
 
-    // Allocation table
-    const entryColors = ['var(--accent-primary)', '#7affcc', '#7ab8ff', '#c17aff'];
-    const tbody = $('frAllocBody');
-    tbody.innerHTML = entries.map((e, i) => `
-      <tr>
-        <td style="color:${entryColors[i]}">${labels[i]}</td>
-        <td>${(pcts[i] * 100).toFixed(1)}%</td>
-        <td>${fmt(capitals[i])}</td>
-        <td>${fmt(exposures[i])}</td>
-      </tr>`).join('');
+    // ── Verification rows ──────────────────────────────────
+    $('frActualLoss').textContent = fmt(slCheckVal);
+    $('frMaxAllowed').textContent = fmt(maxLossPerTrade);
 
-    $('frTotalCap').textContent = fmt(totalCap);
-    $('frTotalExp').textContent = fmt(totalExp);
+    const mkCheck = (pass, failNote) => pass
+      ? '<span class="fib-check-ok">✓</span>'
+      : `<span class="fib-check-fail">✗ ${failNote}</span>`;
 
-    // SL verification
-    $('frActualLoss').textContent = fmt(totalActualLoss);
-    $('frMaxAllowed').textContent = fmt(maxLoss);
-    const badge = $('frBadge');
-    if (slPass) {
-      badge.textContent = '✓ Within Max Loss Limit';
-      badge.className = 'fib-verify-badge pass';
-    } else {
-      badge.textContent = '✗ Exceeds Max Loss — Adjust Position';
-      badge.className = 'fib-verify-badge fail';
-    }
+    $('frDeployedCheck').innerHTML = mkCheck(deployedPass, `${fmt(tradeCap)} > ${fmt(maxCapPerTrade)}`);
+    $('frRiskCheck').innerHTML     = mkCheck(riskPass,     `${fmt(totalLoss)} > ${fmt(maxLoss)}`);
+
+    const badge   = $('frBadge');
+    const allPass = deployedPass && riskPass;
+    badge.textContent = allPass ? '✓ All Checks Passed' : '✗ Review Warnings Above';
+    badge.className   = 'fib-verify-badge ' + (allPass ? 'pass' : 'fail');
 
     $('fibResults').hidden = false;
   });
 
-  // Also trigger on Enter key in inputs
-  ['fcAccount', 'fcE1'].forEach(id => {
-    $(id)?.addEventListener('keydown', e => { if (e.key === 'Enter') $('fibCalcBtn').click(); });
-  });
+  $('fcAccount').addEventListener('keydown', e => { if (e.key === 'Enter') $('fibCalcBtn').click(); });
 })();
 
 /* ════════════════════════════════════════════════════════════
