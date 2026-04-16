@@ -23,6 +23,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from config import DATABASE_URL
 
@@ -35,10 +36,18 @@ _db_url = DATABASE_URL.replace("postgres://", "postgresql://", 1) if DATABASE_UR
 
 if _db_url.startswith("sqlite"):
     _connect_args = {"check_same_thread": False}
+    engine = create_engine(_db_url, connect_args=_connect_args)
 else:
-    _connect_args = {"sslmode": "require"}
-
-engine = create_engine(_db_url, connect_args=_connect_args)
+    # NullPool disables connection pooling — required for Neon serverless Postgres
+    # which closes idle connections aggressively, causing SSL drop errors with pooling
+    engine = create_engine(
+        _db_url,
+        poolclass=NullPool,
+        connect_args={
+            "sslmode": "require",
+            "connect_timeout": 10,
+        }
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
