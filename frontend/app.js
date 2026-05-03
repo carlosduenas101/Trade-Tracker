@@ -2065,7 +2065,8 @@ document.addEventListener('DOMContentLoaded', init);
 
   const TRADE_COLORS = ['#39ff14', '#7ab8ff', '#c17aff', '#ffb400', '#ff7a7a'];
   const ENTRY_COLORS = ['#39ff14', '#7affcc', '#7ab8ff', '#c17aff'];
-  const PCTS         = [0.15, 0.225, 0.30, 0.325];
+  const PCTS = [0.10148, 0.16420, 0.26568, 0.36715];
+  let slMode = 'conservative';
 
   const PAIR_OPTIONS = `
     <optgroup label="── Bitcoin">
@@ -2104,6 +2105,7 @@ document.addEventListener('DOMContentLoaded', init);
       <option value="WIF/USDT">WIF/USDT</option>
       <option value="PEPE/USDT">PEPE/USDT</option>
       <option value="HBAR/USDT">HBAR/USDT</option>
+      <option value="TAO/USDT">TAO/USDT</option>
     </optgroup>
     <optgroup label="── Forex">
       <option value="EUR/USD">EUR/USD</option>
@@ -2177,42 +2179,69 @@ document.addEventListener('DOMContentLoaded', init);
   }
 
   // ── Build inline result HTML for one trade slot ────────────
-  function tradeResultHTML(isLong, e1Price, tradeCap, leverage) {
+  // Accepts maxLossPerTrade and back-solves tradeCap internally.
+  // Reads slMode closure variable for dynamic SL %.
+  // Returns { html, tradeCap, totalExp, totalRealLoss }.
+  function tradeResultHTML(isLong, e1Price, maxLossPerTrade, leverage, account) {
     const s    = isLong ? -1 : 1;
     const fmt  = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
     const fmtP = (n)        => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
 
-    const e1   = e1Price;
-    const e2   = e1 * (1 + s * 0.01618);
-    const e3   = e2 * (1 + s * 0.02618);
-    const e4   = e3 * (1 + s * 0.03618);
-    const sl   = e4 * (1 + s * 0.0370);
-    const wavg = e1*PCTS[0] + e2*PCTS[1] + e3*PCTS[2] + e4*PCTS[3];
-    const tp   = isLong ? wavg * 1.05 : wavg * 0.95;
+    const e1 = e1Price;
+    const e2 = e1 * (1 + s * 0.01618);
+    const e3 = e2 * (1 + s * 0.02618);
+    const e4 = e3 * (1 + s * 0.03618);
+
+    const slPct = slMode === 'conservative' ? 0.03618 : 0.02618;
+    const sl    = e4 * (1 + s * slPct);
+
+    const slModeLabel = slMode === 'conservative' ? 'Conservative 3.618%' : 'Aggressive 2.618%';
+
+    // Back-solve: size position so real loss at SL = maxLossPerTrade exactly
+    const lossMultiplier =
+      PCTS[0] * leverage * Math.abs(e1 - sl) / e1 +
+      PCTS[1] * leverage * Math.abs(e2 - sl) / e2 +
+      PCTS[2] * leverage * Math.abs(e3 - sl) / e3 +
+      PCTS[3] * leverage * Math.abs(e4 - sl) / e4;
+
+    const tradeCap = maxLossPerTrade / lossMultiplier;
 
     const capitals  = PCTS.map(p => tradeCap * p);
     const exposures = capitals.map(c => c * leverage);
     const totalCap  = capitals.reduce((a, b) => a + b, 0);
     const totalExp  = exposures.reduce((a, b) => a + b, 0);
 
+    const wavg   = e1*PCTS[0] + e2*PCTS[1] + e3*PCTS[2] + e4*PCTS[3];
+    const tp     = isLong ? wavg * 1.05 : wavg * 0.95;
+    const slDist = Math.abs((sl - wavg) / wavg) * 100;
+    const rr     = Math.abs((tp - wavg) / (wavg - sl));
+
+    const prices        = [e1, e2, e3, e4];
+    const realLosses    = capitals.map((c, i) => c * leverage * Math.abs(prices[i] - sl) / prices[i]);
+    const totalRealLoss = realLosses.reduce((a, b) => a + b, 0);
+    const realLossPctOfAccount = (totalRealLoss / account) * 100;
+
     const allocRows = ['E1','E2','E3','E4'].map((lbl, j) => `
       <tr>
         <td style="color:${ENTRY_COLORS[j]}">${lbl}</td>
-        <td>${(PCTS[j] * 100).toFixed(1)}%</td>
+        <td>${(PCTS[j] * 100).toFixed(2)}%</td>
         <td>${fmt(capitals[j])}</td>
         <td>${fmt(exposures[j])}</td>
       </tr>`).join('');
 
-    return `
+    const html = `
       <div class="fib-section-title fib-slot-result-title">Entry Structure</div>
       <div class="fib-grid">
-        <div class="fib-row"><span class="fib-key fib-e1">E1</span><span class="fib-val">${fmtP(e1)}</span></div>
+        <div class="fib-row"><span class="fib-key">SL Mode</span><span class="fib-val fib-accent">${slModeLabel}</span></div>
+        <div class="fib-row fib-divider"><span class="fib-key fib-e1">E1</span><span class="fib-val">${fmtP(e1)}</span></div>
         <div class="fib-row"><span class="fib-key fib-e2">E2 <span class="fib-pct">−1.618%</span></span><span class="fib-val">${fmtP(e2)}</span></div>
         <div class="fib-row"><span class="fib-key fib-e3">E3 <span class="fib-pct">−2.618%</span></span><span class="fib-val">${fmtP(e3)}</span></div>
         <div class="fib-row"><span class="fib-key fib-e4">E4 <span class="fib-pct">−3.618%</span></span><span class="fib-val">${fmtP(e4)}</span></div>
         <div class="fib-row fib-divider"><span class="fib-key">Weighted Avg</span><span class="fib-val fib-accent">${fmtP(wavg)}</span></div>
-        <div class="fib-row"><span class="fib-key fib-sl">Stop Loss <span class="fib-pct">−3.70%</span></span><span class="fib-val fib-red">${fmtP(sl)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-sl">Stop Loss <span class="fib-pct">−${(slPct * 100).toFixed(3)}%</span></span><span class="fib-val fib-red">${fmtP(sl)}</span></div>
         <div class="fib-row"><span class="fib-key fib-tp">Take Profit <span class="fib-pct">+5%</span></span><span class="fib-val fib-green">${fmtP(tp)}</span></div>
+        <div class="fib-row fib-divider"><span class="fib-key">Wavg → SL</span><span class="fib-val fib-red">−${slDist.toFixed(2)}% from avg entry</span></div>
+        <div class="fib-row"><span class="fib-key">R:R</span><span class="fib-val fib-accent">1 : ${rr.toFixed(2)}</span></div>
       </div>
       <div class="fib-section-title fib-slot-result-title">Capital Allocation</div>
       <table class="fib-table">
@@ -2225,7 +2254,14 @@ document.addEventListener('DOMContentLoaded', init);
             <td>${fmt(totalExp)}</td>
           </tr>
         </tfoot>
-      </table>`;
+      </table>
+      <div class="fib-grid" style="margin-top:6px">
+        <div class="fib-row"><span class="fib-key">Trade Capital</span><span class="fib-val">${fmt(tradeCap)}</span></div>
+        <div class="fib-row"><span class="fib-key">Total Exposure</span><span class="fib-val">${fmt(totalExp)}</span></div>
+        <div class="fib-row fib-divider"><span class="fib-key">Real loss at SL</span><span class="fib-val fib-red">${fmt(totalRealLoss)} <span class="fib-pct">(${realLossPctOfAccount.toFixed(2)}% of acct)</span> <span class="fib-check-ok">✓</span></span></div>
+      </div>`;
+
+    return { html, tradeCap, totalExp, totalRealLoss };
   }
 
   // ── Leverage slider ────────────────────────────────────────
@@ -2262,9 +2298,39 @@ document.addEventListener('DOMContentLoaded', init);
   // Init on load
   updateTradesDisplay();
 
+  // ── Risk % slider ──────────────────────────────────────────
+  const riskSlider  = $('fcRisk');
+  const riskDisplay = $('fcRiskDisplay');
+
+  function updateRiskDisplay() {
+    riskDisplay.textContent = parseFloat(riskSlider.value).toFixed(1) + '%';
+    const pct = ((riskSlider.value - 0.5) / (50 - 0.5)) * 100;
+    riskSlider.style.background =
+      `linear-gradient(to right, var(--accent-primary) ${pct}%, var(--border-default) ${pct}%)`;
+  }
+  riskSlider.addEventListener('input', updateRiskDisplay);
+  updateRiskDisplay();
+  $('fcRiskMinus').addEventListener('click', () => { riskSlider.value = Math.max(0.5, parseFloat(riskSlider.value) - 0.5); updateRiskDisplay(); });
+  $('fcRiskPlus' ).addEventListener('click', () => { riskSlider.value = Math.min(50,  parseFloat(riskSlider.value) + 0.5); updateRiskDisplay(); });
+
+  // ── Stop Loss mode toggle ──────────────────────────────────
+  $('fcSlConservative').addEventListener('click', () => {
+    slMode = 'conservative';
+    $('fcSlConservative').classList.add('active');
+    $('fcSlAggressive').classList.remove('active');
+    if (!$('fibResults').hidden) $('fibCalcBtn').click();
+  });
+  $('fcSlAggressive').addEventListener('click', () => {
+    slMode = 'aggressive';
+    $('fcSlAggressive').classList.add('active');
+    $('fcSlConservative').classList.remove('active');
+    if (!$('fibResults').hidden) $('fibCalcBtn').click();
+  });
+
   // ── Calculate ──────────────────────────────────────────────
   $('fibCalcBtn').addEventListener('click', () => {
     const account   = parseFloat($('fcAccount').value);
+    const riskPct   = parseFloat($('fcRisk').value);
     const leverage  = parseInt($('fcLeverage').value);
     const numTrades = parseInt($('fcTrades').value);
 
@@ -2272,6 +2338,11 @@ document.addEventListener('DOMContentLoaded', init);
 
     // ── Input validation ───────────────────────────────────
     if (!account || account <= 0) return;
+    if (!riskPct || riskPct < 0.5 || riskPct > 50) {
+      $('frWarning').textContent = riskPct < 0.5 ? '⚠ Minimum risk is 0.5%' : '⚠ Maximum risk is 50%';
+      $('frWarning').hidden = false;
+      return;
+    }
     if (!leverage || leverage < 1 || leverage > 125) {
       $('frWarning').textContent = '⚠ Leverage must be an integer between 1× and 125×.';
       $('frWarning').hidden = false;
@@ -2285,7 +2356,6 @@ document.addEventListener('DOMContentLoaded', init);
       const e1Price = parseFloat(slot.querySelector('.fib-slot-e1')?.value);
       const resultEl = slot.querySelector('.fib-slot-result');
       if (!e1Price || e1Price <= 0) {
-        // Clear any stale result from a previous calculation
         if (resultEl) { resultEl.innerHTML = ''; resultEl.hidden = true; }
         return;
       }
@@ -2296,69 +2366,50 @@ document.addEventListener('DOMContentLoaded', init);
         resultEl,
       });
     });
-    if (!tradeInputs.length) return; // nothing to calculate
+    if (!tradeInputs.length) return;
 
     $('frWarning').hidden = true;
 
-    // ── Account rules ──────────────────────────────────────
-    const deployed        = account * 0.45;
-    const reserve         = account * 0.55;
-    const maxLoss         = account * 0.10;
+    // ── Account risk rules ─────────────────────────────────
+    const maxLoss         = account * (riskPct / 100);
     const maxLossPerTrade = maxLoss / numTrades;
-    const maxCapPerTrade  = deployed / numTrades;
-    const tradeCap        = maxLossPerTrade / (leverage * 0.0370);
-
-    // ── Verifications ──────────────────────────────────────
-    const slCheckVal   = tradeCap * leverage * 0.0370;
-    const deployedPass = tradeCap <= maxCapPerTrade * 1.005;
-    const totalLoss    = slCheckVal * numTrades;
-    const riskPass     = totalLoss <= maxLoss + 0.01;
-
-    // ── Warning banner ─────────────────────────────────────
-    const warnings = [];
-    if (!deployedPass) {
-      const minLev = Math.ceil(maxLossPerTrade / (maxCapPerTrade * 0.0370));
-      warnings.push(`Leverage too low: required capital (${fmt(tradeCap)}) exceeds max deployable (${fmt(maxCapPerTrade)}). Increase to at least <strong>${minLev}×</strong>.`);
-    }
-    if (!riskPass) {
-      warnings.push(`Total risk at SL (${fmt(totalLoss)}) exceeds 10% account cap (${fmt(maxLoss)}).`);
-    }
-    const warnEl = $('frWarning');
-    if (warnings.length > 0) {
-      warnEl.innerHTML = warnings.map(w => `⚠ ${w}`).join('<br>');
-      warnEl.hidden = false;
-    } else {
-      warnEl.hidden = true;
-    }
-
-    // ── Account summary ────────────────────────────────────
-    $('frLeverage').textContent   = leverage + '×';
-    $('frDeployed').textContent   = fmt(deployed);
-    $('frTradeCap').textContent   = fmt(tradeCap) + (numTrades > 1 ? ` ×${numTrades}` : '');
-    $('frReserve').textContent    = fmt(reserve);
-    $('frMaxLoss').textContent    = fmt(maxLoss);
-    $('frMaxLossPer').textContent = fmt(maxLossPerTrade);
 
     // ── Inject results inline into each completed trade slot ─
+    let firstResult = null;
     tradeInputs.forEach(t => {
       if (!t.resultEl) return;
-      t.resultEl.innerHTML = tradeResultHTML(t.dir === 'long', t.e1Price, tradeCap, leverage);
+      const result = tradeResultHTML(t.dir === 'long', t.e1Price, maxLossPerTrade, leverage, account);
+      t.resultEl.innerHTML = result.html;
       t.resultEl.hidden = false;
+      if (!firstResult) firstResult = result;
     });
+    if (!firstResult) return;
+
+    // ── Account overview ───────────────────────────────────
+    $('frRiskPct').textContent    = riskPct.toFixed(2) + '%';
+    $('frSlMode').textContent     = slMode === 'conservative' ? 'Conservative 3.618%' : 'Aggressive 2.618%';
+    $('frMaxLoss').textContent    = fmt(maxLoss);
+    $('frMaxLossPer').textContent = fmt(maxLossPerTrade);
+    $('frTradeCap').textContent   = fmt(firstResult.tradeCap) + (numTrades > 1 ? ` ×${numTrades}` : '');
+    $('frTotalExp').textContent   = fmt(firstResult.totalExp) + (numTrades > 1 ? ` ×${numTrades}` : '');
+    $('frLeverage').textContent   = leverage + '×';
 
     // ── Verification rows ──────────────────────────────────
-    $('frActualLoss').textContent = fmt(slCheckVal);
-    $('frMaxAllowed').textContent = fmt(maxLossPerTrade);
+    const totalRealLossBoth = firstResult.totalRealLoss * numTrades;
+    const realLossPct       = (totalRealLossBoth / account) * 100;
+    const lossMatchPass     = Math.abs(realLossPct - riskPct) < 0.01;
+    const riskCapPass       = riskPct <= 50;
 
     const mkCheck = (pass, failNote) => pass
       ? '<span class="fib-check-ok">✓</span>'
       : `<span class="fib-check-fail">✗ ${failNote}</span>`;
 
-    $('frDeployedCheck').innerHTML = mkCheck(deployedPass, `${fmt(tradeCap)} > ${fmt(maxCapPerTrade)}`);
-    $('frRiskCheck').innerHTML     = mkCheck(riskPass,     `${fmt(totalLoss)} > ${fmt(maxLoss)}`);
+    $('frActualLoss').textContent = fmt(totalRealLossBoth);
+    $('frMaxAllowed').textContent = fmt(maxLoss);
+    $('frRiskCheck').innerHTML    = mkCheck(riskCapPass, `${riskPct.toFixed(2)}% > 50%`);
 
     const badge   = $('frBadge');
-    const allPass = deployedPass && riskPass;
+    const allPass = lossMatchPass && riskCapPass;
     badge.textContent = allPass ? '✓ All Checks Passed' : '✗ Review Warnings Above';
     badge.className   = 'fib-verify-badge ' + (allPass ? 'pass' : 'fail');
 

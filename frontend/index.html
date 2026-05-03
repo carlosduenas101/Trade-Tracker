@@ -437,6 +437,26 @@
 
       <div class="fib-field">
         <div class="fib-lev-header">
+          <label class="fib-label">Risk %</label>
+          <span class="fib-lev-val" id="fcRiskDisplay">10.0%</span>
+        </div>
+        <div class="fib-lev-row">
+          <button class="fib-lev-btn" id="fcRiskMinus" aria-label="Decrease risk">−</button>
+          <input class="fib-lev-slider" type="range" id="fcRisk" min="0.5" max="50" step="0.5" value="10" />
+          <button class="fib-lev-btn" id="fcRiskPlus" aria-label="Increase risk">+</button>
+        </div>
+      </div>
+
+      <div class="fib-field">
+        <label class="fib-label">Stop Loss Mode</label>
+        <div class="fib-toggle-group">
+          <button class="fib-toggle active" id="fcSlConservative">Conservative 3.618%</button>
+          <button class="fib-toggle" id="fcSlAggressive">Aggressive 2.618%</button>
+        </div>
+      </div>
+
+      <div class="fib-field">
+        <div class="fib-lev-header">
           <label class="fib-label">Leverage</label>
           <span class="fib-lev-val" id="fcLeverageDisplay">6×</span>
         </div>
@@ -474,16 +494,12 @@
         <div class="fib-section-title">Account Overview</div>
         <div class="fib-grid">
           <div class="fib-row">
-            <span class="fib-key">Deployed Capital</span>
-            <span class="fib-val" id="frDeployed">—</span>
+            <span class="fib-key">Risk Selected</span>
+            <span class="fib-val fib-accent" id="frRiskPct">—</span>
           </div>
           <div class="fib-row">
-            <span class="fib-key">Per Trade Capital</span>
-            <span class="fib-val" id="frTradeCap">—</span>
-          </div>
-          <div class="fib-row">
-            <span class="fib-key">Reserve</span>
-            <span class="fib-val fib-muted" id="frReserve">—</span>
+            <span class="fib-key">Stop Loss Mode</span>
+            <span class="fib-val" id="frSlMode">—</span>
           </div>
           <div class="fib-row">
             <span class="fib-key">Max Loss (Total)</span>
@@ -492,6 +508,14 @@
           <div class="fib-row">
             <span class="fib-key">Max Loss / Trade</span>
             <span class="fib-val fib-red" id="frMaxLossPer">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key">Trade Capital</span>
+            <span class="fib-val" id="frTradeCap">—</span>
+          </div>
+          <div class="fib-row">
+            <span class="fib-key">Total Exposure</span>
+            <span class="fib-val" id="frTotalExp">—</span>
           </div>
           <div class="fib-row">
             <span class="fib-key">Leverage</span>
@@ -503,19 +527,15 @@
         <div class="fib-section-title">Verification</div>
         <div class="fib-sl-verify" id="frVerify">
           <div class="fib-verify-row">
-            <span>SL · Capital × Lev × 3.70%</span>
+            <span>Real loss at SL = risk% selected</span>
             <span id="frActualLoss">—</span>
           </div>
-          <div class="fib-verify-row">
-            <span>= Max loss / trade (10% ÷ trades)</span>
+          <div class="fib-verify-row fib-verify-divider">
+            <span>= Max loss (target)</span>
             <span id="frMaxAllowed">—</span>
           </div>
-          <div class="fib-verify-row fib-verify-divider">
-            <span>Deployed · Capital ≤ 45% ÷ trades</span>
-            <span id="frDeployedCheck">—</span>
-          </div>
           <div class="fib-verify-row">
-            <span>Risk · Total loss ≤ 10% of account</span>
+            <span>Risk · Total loss ≤ 50% of account</span>
             <span id="frRiskCheck">—</span>
           </div>
           <div class="fib-verify-badge" id="frBadge">—</div>
