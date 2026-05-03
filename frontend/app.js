@@ -2182,7 +2182,7 @@ document.addEventListener('DOMContentLoaded', init);
   // Accepts maxLossPerTrade and back-solves tradeCap internally.
   // Reads slMode closure variable for dynamic SL %.
   // Returns { html, tradeCap, totalExp, totalRealLoss }.
-  function tradeResultHTML(isLong, e1Price, maxLossPerTrade, leverage, account) {
+  function tradeResultHTML(isLong, e1Price, maxLossPerTrade, leverage, account, numTrades) {
     const s    = isLong ? -1 : 1;
     const fmt  = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
     const fmtP = (n)        => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
@@ -2219,7 +2219,7 @@ document.addEventListener('DOMContentLoaded', init);
     const prices        = [e1, e2, e3, e4];
     const realLosses    = capitals.map((c, i) => c * leverage * Math.abs(prices[i] - sl) / prices[i]);
     const totalRealLoss = realLosses.reduce((a, b) => a + b, 0);
-    const realLossPctOfAccount = (totalRealLoss / account) * 100;
+    const realLossPctOfAccount = (totalRealLoss * numTrades / account) * 100;
 
     const allocRows = ['E1','E2','E3','E4'].map((lbl, j) => `
       <tr>
@@ -2258,7 +2258,7 @@ document.addEventListener('DOMContentLoaded', init);
       <div class="fib-grid" style="margin-top:6px">
         <div class="fib-row"><span class="fib-key">Trade Capital</span><span class="fib-val">${fmt(tradeCap)}</span></div>
         <div class="fib-row"><span class="fib-key">Total Exposure</span><span class="fib-val">${fmt(totalExp)}</span></div>
-        <div class="fib-row fib-divider"><span class="fib-key">Real loss at SL</span><span class="fib-val fib-red">${fmt(totalRealLoss)} <span class="fib-pct">(${realLossPctOfAccount.toFixed(2)}% of acct)</span> <span class="fib-check-ok">✓</span></span></div>
+        <div class="fib-row fib-divider"><span class="fib-key">Real loss at SL</span><span class="fib-val fib-red">${fmt(totalRealLoss)} / trade &rarr; ${fmt(totalRealLoss * numTrades)} total <span class="fib-pct">(${realLossPctOfAccount.toFixed(2)}% of acct)</span> <span class="fib-check-ok">✓</span></span></div>
       </div>`;
 
     return { html, tradeCap, totalExp, totalRealLoss };
@@ -2378,7 +2378,7 @@ document.addEventListener('DOMContentLoaded', init);
     let firstResult = null;
     tradeInputs.forEach(t => {
       if (!t.resultEl) return;
-      const result = tradeResultHTML(t.dir === 'long', t.e1Price, maxLossPerTrade, leverage, account);
+      const result = tradeResultHTML(t.dir === 'long', t.e1Price, maxLossPerTrade, leverage, account, numTrades);
       t.resultEl.innerHTML = result.html;
       t.resultEl.hidden = false;
       if (!firstResult) firstResult = result;
