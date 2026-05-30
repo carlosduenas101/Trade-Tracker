@@ -2060,12 +2060,99 @@ document.addEventListener('DOMContentLoaded', init);
 /* ════════════════════════════════════════════════════════════
    FIB MULTI-ENTRY CALCULATOR
    ════════════════════════════════════════════════════════════ */
+
+/*
+ * FibCalc-v4
+ * Pure calculation engine for Fibonacci Multi-Entry Calculator.
+ * No DOM/framework dependencies — pass inputs, receive all output variables.
+ *
+ * Inputs: { account, riskPct, leverage, e1Price, slMode, tpPct, side }
+ *   account   — total account balance in USDT
+ *   riskPct   — risk percentage (e.g. 16 = 16%)
+ *   leverage  — leverage multiplier
+ *   e1Price   — first entry price
+ *   slMode    — "aggressive" | "conservative"
+ *   tpPct     — take profit % from wavg (default 5)
+ *   side      — "short" | "long"
+ */
+function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side }) {
+  const isShort = side === 'short';
+  const dir     = isShort ? 1 : -1;
+
+  // Step 1 — Entry price cascade (each step compounds from previous entry)
+  const e1 = e1Price;
+  const e2 = e1 * (1 + dir * 0.01618);
+  const e3 = e2 * (1 + dir * 0.03618);   // v4: 3.618% from E2
+  const e4 = e3 * (1 + dir * 0.04236);   // v4: 4.236% from E3
+
+  // Step 2 — Stop loss
+  const slPct = slMode === 'aggressive' ? 0.02618 : 0.03618;
+  const sl    = e4 * (1 + dir * slPct);
+
+  // Step 3 — Fixed allocation weights (must sum to 1.0)
+  const ALLOC  = [0.05, 0.10, 0.20, 0.65];
+  const prices = [e1, e2, e3, e4];
+
+  // Step 4 — Individual SL distance per entry
+  const dists = prices.map(p => isShort ? (sl - p) / p : (p - sl) / p);
+
+  // Step 5 — Aggregate weighted loss fraction at leverage
+  const lossMultiplier = (
+    ALLOC[0] * dists[0] + ALLOC[1] * dists[1] + ALLOC[2] * dists[2] + ALLOC[3] * dists[3]
+  ) * leverage;
+
+  // Step 6 — Solve for total capital directly
+  const maxLoss      = account * (riskPct / 100);
+  const totalCapital = maxLoss / lossMultiplier;
+
+  // Step 7 — Capital allocation
+  const e1Capital    = totalCapital * ALLOC[0];
+  const e2Capital    = totalCapital * ALLOC[1];
+  const e3Capital    = totalCapital * ALLOC[2];
+  const e4Capital    = totalCapital * ALLOC[3];
+  const capitals     = [e1Capital, e2Capital, e3Capital, e4Capital];
+  const exposures    = capitals.map(c => c * leverage);
+  const totalExposure = totalCapital * leverage;
+
+  // Step 8 — Weighted average entry (from actual capital and quantity)
+  const qtys     = capitals.map((c, i) => c / prices[i]);
+  const totalQty = qtys.reduce((a, b) => a + b, 0);
+  const wavg     = totalCapital / totalQty;
+
+  // Step 9 — Take profit
+  const tp = isShort ? wavg * (1 - tpPct / 100) : wavg * (1 + tpPct / 100);
+
+  // Summary metrics
+  const wavgToSL = isShort ? (sl - wavg) / wavg * 100 : (wavg - sl) / wavg * 100;
+  const rr       = Math.abs((tp - wavg) / (wavg - sl));
+  const allocs   = capitals.map(c => (c / totalCapital) * 100);
+
+  // Actual real loss at SL (used for verification)
+  const realLoss = qtys.reduce((sum, q, i) => sum + q * Math.abs(sl - prices[i]), 0) * leverage;
+
+  // Verification assertions (console only, never shown to user)
+  console.assert(Math.abs(realLoss - maxLoss) < 0.10,
+    `FibCalc-v4 LOSS MISMATCH: ${maxLoss.toFixed(4)} vs ${realLoss.toFixed(4)}`);
+  console.assert(Math.abs(ALLOC.reduce((a, b) => a + b, 0) - 1.0) < 1e-9,
+    'FibCalc-v4 ALLOC must sum to 1.0');
+  const wavgInRange = isShort ? (wavg > e1 && wavg < sl) : (wavg < e1 && wavg > sl);
+  console.assert(wavgInRange, `FibCalc-v4 WAVG OUT OF RANGE: ${wavg}`);
+
+  return {
+    e1, e2, e3, e4, sl, slPct, tp,
+    wavg, wavgToSL, rr,
+    maxLoss, totalCapital, totalExposure,
+    e1Capital, e2Capital, e3Capital, e4Capital,
+    capitals, exposures, allocs,
+    qtys, totalQty, lossMultiplier, realLoss,
+  };
+}
+
 (function initFibCalc() {
   const $ = (id) => document.getElementById(id);
 
   const TRADE_COLORS = ['#39ff14', '#7ab8ff', '#c17aff', '#ffb400', '#ff7a7a'];
   const ENTRY_COLORS = ['#39ff14', '#7affcc', '#7ab8ff', '#c17aff'];
-  const PCTS = [0.10148, 0.16420, 0.26568, 0.36715];
   let slMode = 'conservative';
 
   const PAIR_OPTIONS = `
@@ -2179,69 +2266,46 @@ document.addEventListener('DOMContentLoaded', init);
   }
 
   // ── Build inline result HTML for one trade slot ────────────
-  // Accepts maxLossPerTrade and back-solves tradeCap internally.
-  // Reads slMode closure variable for dynamic SL %.
+  // Delegates all math to calcFib (FibCalc-v3).
   // Returns { html, tradeCap, totalExp, totalRealLoss }.
   function tradeResultHTML(isLong, e1Price, maxLossPerTrade, leverage, account, numTrades) {
-    const s    = isLong ? -1 : 1;
     const fmt  = (n, d = 2) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
     const fmtP = (n)        => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
 
-    const e1 = e1Price;
-    const e2 = e1 * (1 + s * 0.01618);
-    const e3 = e2 * (1 + s * 0.02618);
-    const e4 = e3 * (1 + s * 0.03618);
+    // Derive riskPct from maxLossPerTrade so calcFib receives the correct maxLoss
+    const riskPct = (maxLossPerTrade / account) * 100;
+    const c = calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct: 5, side: isLong ? 'long' : 'short' });
 
-    const slPct = slMode === 'conservative' ? 0.03618 : 0.02618;
-    const sl    = e4 * (1 + s * slPct);
+    const slModeLabel          = slMode === 'conservative' ? 'Conservative 3.618%' : 'Aggressive 2.618%';
+    const realLossPctOfAccount = (c.realLoss * numTrades / account) * 100;
 
-    const slModeLabel = slMode === 'conservative' ? 'Conservative 3.618%' : 'Aggressive 2.618%';
-
-    // Back-solve: size position so real loss at SL = maxLossPerTrade exactly
-    const lossMultiplier =
-      PCTS[0] * leverage * Math.abs(e1 - sl) / e1 +
-      PCTS[1] * leverage * Math.abs(e2 - sl) / e2 +
-      PCTS[2] * leverage * Math.abs(e3 - sl) / e3 +
-      PCTS[3] * leverage * Math.abs(e4 - sl) / e4;
-
-    const tradeCap = maxLossPerTrade / lossMultiplier;
-
-    const capitals  = PCTS.map(p => tradeCap * p);
-    const exposures = capitals.map(c => c * leverage);
-    const totalCap  = capitals.reduce((a, b) => a + b, 0);
-    const totalExp  = exposures.reduce((a, b) => a + b, 0);
-
-    const wavg   = e1*PCTS[0] + e2*PCTS[1] + e3*PCTS[2] + e4*PCTS[3];
-    const tp     = isLong ? wavg * 1.05 : wavg * 0.95;
-    const slDist = Math.abs((sl - wavg) / wavg) * 100;
-    const rr     = Math.abs((tp - wavg) / (wavg - sl));
-
-    const prices        = [e1, e2, e3, e4];
-    const realLosses    = capitals.map((c, i) => c * leverage * Math.abs(prices[i] - sl) / prices[i]);
-    const totalRealLoss = realLosses.reduce((a, b) => a + b, 0);
-    const realLossPctOfAccount = (totalRealLoss * numTrades / account) * 100;
+    // Step labels derived from the same constants as the price cascade
+    const stepSign = isLong ? '−' : '+';
+    const e2Step   = stepSign + (0.01618 * 100).toFixed(3) + '%';
+    const e3Step   = stepSign + (0.03618 * 100).toFixed(3) + '%';
+    const e4Step   = stepSign + (0.04236 * 100).toFixed(3) + '%';
 
     const allocRows = ['E1','E2','E3','E4'].map((lbl, j) => `
       <tr>
         <td style="color:${ENTRY_COLORS[j]}">${lbl}</td>
-        <td>${(PCTS[j] * 100).toFixed(2)}%</td>
-        <td>${fmt(capitals[j])}</td>
-        <td>${fmt(exposures[j])}</td>
+        <td>${c.allocs[j].toFixed(2)}%</td>
+        <td>${fmt(c.capitals[j])}</td>
+        <td>${fmt(c.exposures[j])}</td>
       </tr>`).join('');
 
     const html = `
       <div class="fib-section-title fib-slot-result-title">Entry Structure</div>
       <div class="fib-grid">
         <div class="fib-row"><span class="fib-key">SL Mode</span><span class="fib-val fib-accent">${slModeLabel}</span></div>
-        <div class="fib-row fib-divider"><span class="fib-key fib-e1">E1</span><span class="fib-val">${fmtP(e1)}</span></div>
-        <div class="fib-row"><span class="fib-key fib-e2">E2 <span class="fib-pct">−1.618%</span></span><span class="fib-val">${fmtP(e2)}</span></div>
-        <div class="fib-row"><span class="fib-key fib-e3">E3 <span class="fib-pct">−2.618%</span></span><span class="fib-val">${fmtP(e3)}</span></div>
-        <div class="fib-row"><span class="fib-key fib-e4">E4 <span class="fib-pct">−3.618%</span></span><span class="fib-val">${fmtP(e4)}</span></div>
-        <div class="fib-row fib-divider"><span class="fib-key">Weighted Avg</span><span class="fib-val fib-accent">${fmtP(wavg)}</span></div>
-        <div class="fib-row"><span class="fib-key fib-sl">Stop Loss <span class="fib-pct">−${(slPct * 100).toFixed(3)}%</span></span><span class="fib-val fib-red">${fmtP(sl)}</span></div>
-        <div class="fib-row"><span class="fib-key fib-tp">Take Profit <span class="fib-pct">+5%</span></span><span class="fib-val fib-green">${fmtP(tp)}</span></div>
-        <div class="fib-row fib-divider"><span class="fib-key">Wavg → SL</span><span class="fib-val fib-red">−${slDist.toFixed(2)}% from avg entry</span></div>
-        <div class="fib-row"><span class="fib-key">R:R</span><span class="fib-val fib-accent">1 : ${rr.toFixed(2)}</span></div>
+        <div class="fib-row fib-divider"><span class="fib-key fib-e1">E1</span><span class="fib-val">${fmtP(c.e1)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-e2">E2 <span class="fib-pct">${e2Step}</span></span><span class="fib-val">${fmtP(c.e2)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-e3">E3 <span class="fib-pct">${e3Step}</span></span><span class="fib-val">${fmtP(c.e3)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-e4">E4 <span class="fib-pct">${e4Step}</span></span><span class="fib-val">${fmtP(c.e4)}</span></div>
+        <div class="fib-row fib-divider"><span class="fib-key">Weighted Avg</span><span class="fib-val fib-accent">${fmtP(c.wavg)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-sl">Stop Loss <span class="fib-pct">−${(c.slPct * 100).toFixed(3)}%</span></span><span class="fib-val fib-red">${fmtP(c.sl)}</span></div>
+        <div class="fib-row"><span class="fib-key fib-tp">Take Profit <span class="fib-pct">+5%</span></span><span class="fib-val fib-green">${fmtP(c.tp)}</span></div>
+        <div class="fib-row fib-divider"><span class="fib-key">Wavg → SL</span><span class="fib-val fib-red">−${c.wavgToSL.toFixed(2)}% from avg entry</span></div>
+        <div class="fib-row"><span class="fib-key">R:R</span><span class="fib-val fib-accent">1 : ${c.rr.toFixed(2)}</span></div>
       </div>
       <div class="fib-section-title fib-slot-result-title">Capital Allocation</div>
       <table class="fib-table">
@@ -2250,18 +2314,18 @@ document.addEventListener('DOMContentLoaded', init);
         <tfoot>
           <tr class="fib-table-total">
             <td colspan="2">Total</td>
-            <td>${fmt(totalCap)}</td>
-            <td>${fmt(totalExp)}</td>
+            <td>${fmt(c.totalCapital)}</td>
+            <td>${fmt(c.totalExposure)}</td>
           </tr>
         </tfoot>
       </table>
       <div class="fib-grid" style="margin-top:6px">
-        <div class="fib-row"><span class="fib-key">Trade Capital</span><span class="fib-val">${fmt(tradeCap)}</span></div>
-        <div class="fib-row"><span class="fib-key">Total Exposure</span><span class="fib-val">${fmt(totalExp)}</span></div>
-        <div class="fib-row fib-divider"><span class="fib-key">Real loss at SL</span><span class="fib-val fib-red">${fmt(totalRealLoss)} / trade &rarr; ${fmt(totalRealLoss * numTrades)} total <span class="fib-pct">(${realLossPctOfAccount.toFixed(2)}% of acct)</span> <span class="fib-check-ok">✓</span></span></div>
+        <div class="fib-row"><span class="fib-key">Trade Capital</span><span class="fib-val">${fmt(c.totalCapital)}</span></div>
+        <div class="fib-row"><span class="fib-key">Total Exposure</span><span class="fib-val">${fmt(c.totalExposure)}</span></div>
+        <div class="fib-row fib-divider"><span class="fib-key">Real loss at SL</span><span class="fib-val fib-red">${fmt(c.realLoss)} / trade &rarr; ${fmt(c.realLoss * numTrades)} total <span class="fib-pct">(${realLossPctOfAccount.toFixed(2)}% of acct)</span> <span class="fib-check-ok">✓</span></span></div>
       </div>`;
 
-    return { html, tradeCap, totalExp, totalRealLoss };
+    return { html, tradeCap: c.totalCapital, totalExp: c.totalExposure, totalRealLoss: c.realLoss };
   }
 
   // ── Leverage slider ────────────────────────────────────────
