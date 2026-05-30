@@ -2202,11 +2202,34 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
             <div class="fib-pin-price-cell"><span class="fib-pin-price-lbl fib-e3">E3</span><span class="fib-pin-price-val">${fP(p.e3)}</span></div>
             <div class="fib-pin-price-cell"><span class="fib-pin-price-lbl fib-e4">E4</span><span class="fib-pin-price-val">${fP(p.e4)}</span></div>
           </div>
+          ${p.e1Cap != null ? `
+          <table class="fib-table" style="margin-top:4px">
+            <thead><tr><th>Entry</th><th>Alloc</th><th>Capital</th><th>Exposure</th></tr></thead>
+            <tbody>
+              ${['E1','E2','E3','E4'].map((lbl,i) => {
+                const caps = [p.e1Cap,p.e2Cap,p.e3Cap,p.e4Cap];
+                const exps = p.exposures || [];
+                const allc = p.allocs || [];
+                return `<tr>
+                  <td class="fib-e${i+1}">${lbl}</td>
+                  <td>${allc[i] != null ? allc[i].toFixed(2)+'%' : '—'}</td>
+                  <td>${fM(caps[i])}</td>
+                  <td>${exps[i] != null ? fM(exps[i]) : '—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <tr class="fib-table-total">
+                <td colspan="2">Total</td>
+                <td>${fM(p.capital)}</td>
+                <td>${p.totalExposure != null ? fM(p.totalExposure) : '—'}</td>
+              </tr>
+            </tfoot>
+          </table>` : ''}
           <div class="fib-pin-metrics">
             <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">SL</span><span class="fib-pin-metric-val fib-red">${fP(p.sl)}</span></div>
             <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">Wavg</span><span class="fib-pin-metric-val fib-accent">${fP(p.wavg)}</span></div>
             <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">TP</span><span class="fib-pin-metric-val fib-green">${fP(p.tp)}</span></div>
-            <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">Capital</span><span class="fib-pin-metric-val">${fM(p.capital)}</span></div>
             <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">Max Loss</span><span class="fib-pin-metric-val fib-red">${fM(p.maxLoss)}</span></div>
           </div>
         </div>
@@ -2530,6 +2553,11 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
             tp: +c.tp.toFixed(5),
             capital: +c.totalCapital.toFixed(2),
             maxLoss: +c.maxLoss.toFixed(2),
+            totalExposure: +c.totalExposure.toFixed(2),
+            e1Cap: +c.e1Capital.toFixed(2), e2Cap: +c.e2Capital.toFixed(2),
+            e3Cap: +c.e3Capital.toFixed(2), e4Cap: +c.e4Capital.toFixed(2),
+            allocs: c.allocs.map(a => +a.toFixed(2)),
+            exposures: c.exposures.map(e => +e.toFixed(2)),
           });
           pinBtn.textContent = 'Pinned ✓';
           pinBtn.disabled = true;
