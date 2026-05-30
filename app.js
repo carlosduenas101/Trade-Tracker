@@ -2155,6 +2155,72 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
   const ENTRY_COLORS = ['#39ff14', '#7affcc', '#7ab8ff', '#c17aff'];
   let slMode = 'conservative';
 
+  // ── Pinned trades persistence ──────────────────────────
+  const PINS_KEY = 'illustrade:pins';
+
+  function getPins() {
+    try { return JSON.parse(localStorage.getItem(PINS_KEY) || '[]'); } catch { return []; }
+  }
+  function savePins(pins) { localStorage.setItem(PINS_KEY, JSON.stringify(pins)); }
+
+  function pinTrade(data) {
+    const pins = getPins();
+    pins.push(Object.assign({ id: Date.now(), ts: new Date().toISOString() }, data));
+    if (pins.length > 50) pins.splice(0, pins.length - 50);
+    savePins(pins);
+    renderPinsPanel();
+  }
+
+  function renderPinsPanel() {
+    const pins  = getPins();
+    const list  = $('fcPinsList');
+    const badge = $('fcPinsCount');
+    badge.textContent = pins.length;
+    badge.hidden = pins.length === 0;
+
+    const fP = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
+    const fM = n => '$' + (+n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fD = ts => new Date(ts).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+
+    if (!pins.length) {
+      list.innerHTML = '<div class="fib-pins-empty">No pinned trades yet.</div>';
+      return;
+    }
+
+    list.innerHTML = [...pins].reverse().map(p => `
+      <div class="fib-pin-card" data-pin-id="${p.id}">
+        <div class="fib-pin-card-header">
+          <span class="fib-pin-symbol">${escHtml(p.symbol)}</span>
+          <span class="fib-pin-side ${p.side}">${p.side.toUpperCase()}</span>
+          <span class="fib-pin-ts">${fD(p.ts)}</span>
+          <button class="fib-pin-remove" title="Remove pin">&times;</button>
+        </div>
+        <div class="fib-pin-body">
+          <div class="fib-pin-prices">
+            <div class="fib-pin-price-cell"><span class="fib-pin-price-lbl fib-e1">E1</span><span class="fib-pin-price-val">${fP(p.e1)}</span></div>
+            <div class="fib-pin-price-cell"><span class="fib-pin-price-lbl fib-e2">E2</span><span class="fib-pin-price-val">${fP(p.e2)}</span></div>
+            <div class="fib-pin-price-cell"><span class="fib-pin-price-lbl fib-e3">E3</span><span class="fib-pin-price-val">${fP(p.e3)}</span></div>
+            <div class="fib-pin-price-cell"><span class="fib-pin-price-lbl fib-e4">E4</span><span class="fib-pin-price-val">${fP(p.e4)}</span></div>
+          </div>
+          <div class="fib-pin-metrics">
+            <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">SL</span><span class="fib-pin-metric-val fib-red">${fP(p.sl)}</span></div>
+            <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">Wavg</span><span class="fib-pin-metric-val fib-accent">${fP(p.wavg)}</span></div>
+            <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">TP</span><span class="fib-pin-metric-val fib-green">${fP(p.tp)}</span></div>
+            <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">Capital</span><span class="fib-pin-metric-val">${fM(p.capital)}</span></div>
+            <div class="fib-pin-metric"><span class="fib-pin-metric-lbl">Max Loss</span><span class="fib-pin-metric-val fib-red">${fM(p.maxLoss)}</span></div>
+          </div>
+        </div>
+      </div>`).join('');
+
+    list.querySelectorAll('.fib-pin-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = +btn.closest('.fib-pin-card').dataset.pinId;
+        savePins(getPins().filter(p => p.id !== id));
+        renderPinsPanel();
+      });
+    });
+  }
+
   const PAIR_OPTIONS = `
     <optgroup label="── Bitcoin">
       <option value="BTC/USDT">BTC/USDT</option>
@@ -2323,9 +2389,10 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
         <div class="fib-row"><span class="fib-key">Trade Capital</span><span class="fib-val">${fmt(c.totalCapital)}</span></div>
         <div class="fib-row"><span class="fib-key">Total Exposure</span><span class="fib-val">${fmt(c.totalExposure)}</span></div>
         <div class="fib-row fib-divider"><span class="fib-key">Real loss at SL</span><span class="fib-val fib-red">${fmt(c.realLoss)} / trade &rarr; ${fmt(c.realLoss * numTrades)} total <span class="fib-pct">(${realLossPctOfAccount.toFixed(2)}% of acct)</span> <span class="fib-check-ok">✓</span></span></div>
-      </div>`;
+      </div>
+      <button class="fib-pin-btn">⊕ Pin</button>`;
 
-    return { html, tradeCap: c.totalCapital, totalExp: c.totalExposure, totalRealLoss: c.realLoss };
+    return { html, tradeCap: c.totalCapital, totalExp: c.totalExposure, totalRealLoss: c.realLoss, calcResult: c };
   }
 
   // ── Leverage slider ────────────────────────────────────────
@@ -2446,6 +2513,29 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
       t.resultEl.innerHTML = result.html;
       t.resultEl.hidden = false;
       if (!firstResult) firstResult = result;
+
+      // Wire Pin button — only appears after successful calc
+      const pinBtn = t.resultEl.querySelector('.fib-pin-btn');
+      if (pinBtn) {
+        pinBtn.addEventListener('click', () => {
+          const c = result.calcResult;
+          pinTrade({
+            symbol:  t.pair,
+            side:    t.dir,
+            account, riskPct, leverage, slMode,
+            tpPct:   5,
+            e1: +c.e1.toFixed(5), e2: +c.e2.toFixed(5),
+            e3: +c.e3.toFixed(5), e4: +c.e4.toFixed(5),
+            sl: +c.sl.toFixed(5), wavg: +c.wavg.toFixed(5),
+            tp: +c.tp.toFixed(5),
+            capital: +c.totalCapital.toFixed(2),
+            maxLoss: +c.maxLoss.toFixed(2),
+          });
+          pinBtn.textContent = 'Pinned ✓';
+          pinBtn.disabled = true;
+          setTimeout(() => { pinBtn.textContent = '⊕ Pin'; pinBtn.disabled = false; }, 2000);
+        });
+      }
     });
     if (!firstResult) return;
 
@@ -2481,6 +2571,17 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
   });
 
   $('fcAccount').addEventListener('keydown', e => { if (e.key === 'Enter') $('fibCalcBtn').click(); });
+
+  // ── Pinned trades panel toggle + initial render ────────
+  $('fcPinsToggle').addEventListener('click', () => {
+    const panel   = $('fcPinsPanel');
+    const chevron = $('fcPinsChevron');
+    const opening = panel.hidden;
+    panel.hidden      = !opening;
+    chevron.textContent = opening ? '▴' : '▾';
+  });
+
+  renderPinsPanel();
 })();
 
 /* ════════════════════════════════════════════════════════════
