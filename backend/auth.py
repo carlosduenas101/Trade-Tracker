@@ -32,12 +32,27 @@ ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
 # ---------------------------------------------------------------------------
 
 
+# bcrypt only uses the first 72 bytes of a password. bcrypt >= 4.1 raises a
+# ValueError on longer input instead of silently truncating like older versions
+# (and passlib) did. We truncate to 72 bytes here to preserve that historical
+# behaviour — otherwise long passwords would 500 the login endpoint.
+_BCRYPT_MAX_BYTES = 72
+
+
+def _truncate(plain: str) -> bytes:
+    return plain.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+
+
 def hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(_truncate(plain), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    try:
+        return bcrypt.checkpw(_truncate(plain), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        # Malformed/legacy hash — fail closed rather than 500 the request.
+        return False
 
 
 # ---------------------------------------------------------------------------
