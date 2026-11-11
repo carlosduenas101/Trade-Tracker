@@ -571,7 +571,9 @@ async function apiFetch(path, options = {}) {
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { const j = await res.json(); msg = j.detail || j.message || msg; } catch (_) {}
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
   }
   if (res.status === 204) return null;
   return res.json();
@@ -3487,11 +3489,25 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
       composition   = comp;
 
       showError(null);
+      poolSection().hidden = false;
       render();
       renderGrowthChart();
     } catch (err) {
+      if (err.status === 403) { lockPool(); return; }   // not the pool owner: no pool UI, no pool data
       showError(err.message);
     }
+  }
+
+  // The backend is what enforces access (403 for everyone but the owner); this
+  // only keeps the pool UI out of sight and drops anything already held in memory.
+  function poolSection() { return document.querySelector('.pool-section'); }
+  function lockPool() {
+    summary = null; contributions = []; growthData = null; ownerSummary = null; snapshots = []; composition = null;
+    const sec = poolSection();
+    sec.hidden = true;
+    sec.querySelectorAll('tbody').forEach(t => { t.innerHTML = ''; });
+    sec.querySelectorAll('[id^="pool"]').forEach(el => { if (!el.matches('input,select,button,textarea')) el.textContent = ''; });
+    showError(null);
   }
   // refreshAll() calls this after login / on refresh
   window.refreshPool = load;

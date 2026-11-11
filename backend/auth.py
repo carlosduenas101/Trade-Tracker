@@ -108,3 +108,29 @@ def require_admin_secret(request: Request) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid admin secret.",
         )
+
+
+# ---------------------------------------------------------------------------
+# Fund pool access — only one account (POOL_OWNER_USER_ID) may see or touch it
+# ---------------------------------------------------------------------------
+
+
+def pool_owner_id() -> Optional[int]:
+    """Server-side id of the only account allowed into the fund pool.
+
+    Read from the environment on every call so a missing/invalid value always
+    means deny-all (never a crash, never a fallback to "any logged-in user").
+    """
+    raw = os.environ.get("POOL_OWNER_USER_ID", "").strip()
+    try:
+        return int(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def require_pool_owner(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency for every /fund-pool route: 401 if not logged in, 403 unless owner."""
+    owner = pool_owner_id()
+    if owner is None or current_user.id != owner:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
+    return current_user

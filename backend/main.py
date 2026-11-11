@@ -55,7 +55,9 @@ from auth import (
     create_access_token,
     get_current_user,
     hash_password,
+    pool_owner_id,
     require_admin_secret,
+    require_pool_owner,
     verify_password,
 )
 from database import (
@@ -138,6 +140,11 @@ def on_startup() -> None:
         init_db()
         logging.info("Database initialised successfully.")
         paper.start_engine()
+        if pool_owner_id() is None:
+            logging.error(
+                "POOL_OWNER_USER_ID is missing or not an integer: the fund pool is "
+                "locked for EVERY user (deny by default). Set it to the owner's user id."
+            )
     except Exception as exc:
         logging.error(f"Database init failed: {exc}")
         raise
@@ -755,7 +762,7 @@ def _validate_amount(amount: float, investor: Investor) -> None:
 def create_investor(
     payload: InvestorCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> Investor:
     """
     Create an investor. Idempotent by name (case-insensitive): adding a
@@ -787,7 +794,7 @@ def update_investor(
     investor_id: int,
     payload: InvestorUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> Investor:
     """Edit an investor's name and/or contact."""
     investor = db.query(Investor).filter(Investor.id == investor_id).first()
@@ -834,7 +841,7 @@ def update_investor(
 def create_contribution(
     payload: ContributionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ):
     """
     Add a principal contribution for an existing investor.
@@ -866,7 +873,7 @@ def create_contribution(
          tags=["Fund Pool"])
 def list_contributions(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ):
     """
     All contributions joined with investor name, plus computed fields:
@@ -893,7 +900,7 @@ def update_contribution(
     contribution_id: int,
     payload: ContributionUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ):
     """
     Edit a contribution's amount, date_contributed and/or payout_type.
@@ -940,7 +947,7 @@ def update_contribution(
 def get_contribution_ledger(
     contribution_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ):
     """Full return_ledger history for one contribution, plus its header info."""
     contribution = db.query(Contribution).filter(Contribution.id == contribution_id).first()
@@ -966,7 +973,7 @@ def mark_ledger_paid(
     ledger_id: int,
     payload: MarkPaidRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> ReturnLedger:
     """
     Settle one return as cash: sets paid=True, paid_date and payment_method.
@@ -1010,7 +1017,7 @@ def edit_ledger_row(
     ledger_id: int,
     payload: LedgerUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> ReturnLedger:
     """
     General correction for one ledger row — amount, action, paid status,
@@ -1064,7 +1071,7 @@ def set_ledger_action(
     ledger_id: int,
     payload: SetActionRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ):
     """
     Flip an unpaid period between 'paid' and 'compound'. Cascades a recompute
@@ -1104,7 +1111,7 @@ def withdraw_contribution(
     contribution_id: int,
     payload: WithdrawRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ):
     """
     Withdraw a compound contribution: pays out balance - principal in one
@@ -1138,7 +1145,7 @@ def withdraw_contribution(
 @app.get("/fund-pool/summary", response_model=PoolSummaryResponse, tags=["Fund Pool"])
 def get_pool_summary(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> dict:
     """Totals for the dashboard tiles — see fund_pool.pool_summary."""
     return fund_pool.pool_summary(db)
@@ -1147,7 +1154,7 @@ def get_pool_summary(
 @app.get("/fund-pool/growth", response_model=GrowthResponse, tags=["Fund Pool"])
 def get_pool_growth(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> dict:
     """Monthly pool-value trend vs a flat-APY savings benchmark — see fund_pool.growth_series."""
     return fund_pool.growth_series(db)
@@ -1163,7 +1170,7 @@ def get_pool_growth(
 def create_equity_snapshot(
     payload: EquitySnapshotCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> dict:
     """
     Record the total account value on a date and freeze the liability split
@@ -1203,7 +1210,7 @@ def create_equity_snapshot(
          tags=["Fund Pool"])
 def list_equity_snapshots(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> list[dict]:
     """
     Every snapshot oldest-first with its time-weighted period return and the
@@ -1217,7 +1224,7 @@ def list_equity_snapshots(
 def delete_equity_snapshot(
     snapshot_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> None:
     """
     Delete a snapshot. The TWR chain re-links across the gap on the next read
@@ -1233,7 +1240,7 @@ def delete_equity_snapshot(
 @app.get("/fund-pool/owner-summary", response_model=OwnerSummaryResponse, tags=["Fund Pool"])
 def get_owner_summary(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> dict:
     """
     How much of the account is actually mine — see fund_pool.owner_summary.
@@ -1249,7 +1256,7 @@ def get_owner_summary(
          tags=["Fund Pool"])
 def get_equity_composition(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_pool_owner),
 ) -> dict:
     """
     Who has a claim on the account, as ring slices — see

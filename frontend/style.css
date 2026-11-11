@@ -604,6 +604,7 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 /* ════════════════════════════════════════════════════════════
    POOL FUND DASHBOARD
    ════════════════════════════════════════════════════════════ */
+.pool-section[hidden] { display: none; }
 .pool-section {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
