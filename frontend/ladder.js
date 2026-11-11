@@ -29,6 +29,13 @@
  *   slPct      — stop loss beyond the last entry in % (default 2.618)
  *   feePct     — taker fee per side in % (default 0.06)
  *   maxEntries — safety cap on number of entries (default 10)
+ *   customPrices — optional array (E1..E6) of user-chosen entry prices. A blank
+ *                  slot (null / undefined / '' / NaN) falls back to the model
+ *                  price for that entry. A non-empty slot 0 overrides e1Price.
+ *                  Each custom price must lie beyond the previous entry and
+ *                  before the liquidation of the entries so far; otherwise the
+ *                  result carries `error` ({ entry, code, price, limit,
+ *                  message }) plus the valid `rows` before it. Never throws.
  *
  * Liquidation is approximated as avg × (1 ∓ 1/leverage) — isolated margin,
  * without maintenance margin. Real exchange liquidation is slightly closer.
@@ -36,8 +43,20 @@
 function calcLadder({
   capital, leverage, e1Price, side = 'long',
   e1Pct = 3, e2DistPct = 1.619, liqBufPct = 1, tpPct = 1, slPct = 2.618, feePct = 0.06,
-  maxEntries = 10,
+  maxEntries = 10, customPrices,
 }) {
+  // Custom entry prices: only slots holding a finite number count; blanks use the model
+  const custom = [];
+  if (Array.isArray(customPrices)) {
+    for (let i = 0; i < Math.min(customPrices.length, 6); i++) {
+      const raw = customPrices[i];
+      const v = (raw === null || raw === undefined || raw === '') ? NaN : Number(raw);
+      custom[i] = Number.isFinite(v) ? v : null;
+    }
+  }
+  const hasCustom = custom.some(v => v !== null);
+  if (hasCustom && custom[0] !== null && custom[0] > 0) e1Price = custom[0];
+
   const isLong = side !== 'short';
   const dir    = isLong ? 1 : -1;          // +1 long (entries below), −1 short (entries above)
   const fee    = feePct / 100;
@@ -59,15 +78,33 @@ function calcLadder({
   // Step 2 — walk the ladder
   const rows = [];
   let N = 0, Q = 0, entryFees = 0, liq = 0, prevPrice = e1Price;
-  let blocked = null;
+  const fmtLimit = n => String(+n.toPrecision(8));
+  let blocked = null, error = null;
+  const customEntries = [];
   for (let i = 0; i < margins.length; i++) {
     let price;
     if (i === 0)      price = e1Price;
     else if (i === 1) price = e1Price * (1 - dir * e2DistPct / 100);
     else              price = liq * (1 + dir * liqBufPct / 100);
 
+    // User-chosen price for this entry (E1 is handled through e1Price above)
+    if (i > 0 && custom[i] !== null && custom[i] !== undefined) {
+      const side$ = isLong ? 'below' : 'above';
+      const mk = (code, limit, message) => ({ entry: i + 1, code, price: custom[i], limit, message });
+      if (!(custom[i] > 0)) {
+        error = mk('invalid_price', 0, `E${i + 1} must be a positive price.`);
+      } else if (isLong ? custom[i] >= prevPrice : custom[i] <= prevPrice) {
+        error = mk('not_beyond_previous', prevPrice, `E${i + 1} must be ${side$} E${i} (${fmtLimit(prevPrice)}).`);
+      } else if (isLong ? custom[i] <= liq : custom[i] >= liq) {
+        error = mk('beyond_liquidation', liq, `E${i + 1} must be ${isLong ? 'above' : 'below'} the liquidation price (${fmtLimit(liq)}) after E${i}.`);
+      }
+      if (error) break;
+      price = custom[i];
+      customEntries.push(i + 1);
+    }
+
     // An entry must sit beyond the previous one and before the current liquidation
-    if (i > 0) {
+    if (i > 0 && !customEntries.includes(i + 1)) {
       const beyondPrev   = isLong ? price < prevPrice : price > prevPrice;
       const beforeLiq    = isLong ? price > liq       : price < liq;
       if (!beyondPrev || !beforeLiq) { blocked = { entry: i + 1, price, liq }; break; }
@@ -102,6 +139,9 @@ function calcLadder({
     prevPrice = price;
   }
 
+  if (error) return { error, rows, side: isLong ? 'long' : 'short', leverage: L, capital, e1Price, blocked: null };
+  if (hasCustom && custom[0] !== null && custom[0] > 0) customEntries.unshift(1);
+
   // Step 3 — stop loss beyond the last entry, and whether it acts before liquidation
   const last      = rows[rows.length - 1];
   const sl        = last.price * (1 - dir * slPct / 100);
@@ -120,6 +160,7 @@ function calcLadder({
     finalLiq: last.liq, finalLiqDistFromE1: last.liqDistFromE1,
     sl, slDistFromE1: (sl / e1Price - 1) * 100, slEffective, slAboveLiqPct,
     slLoss, liqLoss, entryFees,
+    ...(customEntries.length ? { customEntries } : {}),
   };
 }
 
@@ -312,6 +353,9 @@ if (typeof module !== 'undefined' && module.exports) {
   const STORE_KEY = 'illustrade:ladder';
   const DEFAULTS  = { e1Pct: 3, e2DistPct: 1.619, liqBufPct: 1, tpPct: 1, slPct: 2.618, feePct: 0.06 };
   let side = 'long';
+  // Custom entry prices: null = not edited (shows and follows the model price)
+  let customOn = false;
+  const cvals = [null, null, null, null, null, null];
 
   const esc  = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmtM = (n, d = 2) => (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -375,12 +419,60 @@ if (typeof module !== 'undefined' && module.exports) {
     recalcIfShown();
   });
 
+  // ── Custom entry prices ────────────────────────────────────
+  const N_CUSTOM = 6;
+  $('lcCustomGrid').innerHTML = Array.from({ length: N_CUSTOM }, (_, i) => `
+    <label for="lcCP${i + 1}">E${i + 1}</label>
+    <div><input class="fib-input" type="number" id="lcCP${i + 1}" min="0" step="any" placeholder="model" />
+    <span class="lc-cp-err" id="lcCPErr${i + 1}" role="alert"></span></div>`).join('');
+  const cpInput = i => $('lcCP' + (i + 1));
+  const fmtRaw = n => String(+n.toPrecision(8));
+
+  function setCustomOn(on) {
+    customOn = on;
+    $('lcCustom').checked = on;
+    $('lcCustomBox').hidden = !on;
+    if (on) syncCustomInputs(null);
+  }
+  // Write model/effective prices into inputs the user has not edited (never the focused one)
+  function syncCustomInputs(rows) {
+    const e1 = $('lcE1').value;
+    if (document.activeElement !== cpInput(0)) cpInput(0).value = e1;
+    for (let i = 1; i < N_CUSTOM; i++) {
+      const el = cpInput(i);
+      if (cvals[i] !== null) { el.value = cvals[i]; continue; }
+      if (document.activeElement === el) continue;
+      el.value = rows && rows[i] ? fmtRaw(rows[i].price) : '';
+    }
+  }
+  function showCustomErrors(err) {
+    for (let i = 1; i <= N_CUSTOM; i++) { $('lcCPErr' + i).textContent = ''; cpInput(i - 1).classList.remove('invalid'); }
+    if (err) { $('lcCPErr' + err.entry).textContent = err.message; cpInput(err.entry - 1).classList.add('invalid'); }
+  }
+  function customPricesArg() {
+    if (!customOn) return undefined;
+    const e1 = parseFloat($('lcE1').value);
+    return [Number.isFinite(e1) ? e1 : null, ...cvals.slice(1).map(v => (v === null || v === '' ? null : parseFloat(v)))];
+  }
+  $('lcCustom').addEventListener('change', e => { setCustomOn(e.target.checked); if (!$('lcResults').hidden || e.target.checked) recalcIfShown(); save(); });
+  $('lcCustomReset').addEventListener('click', () => { cvals.fill(null); showCustomErrors(null); syncCustomInputs(null); recalcIfShown(); save(); });
+  for (let i = 0; i < N_CUSTOM; i++) {
+    cpInput(i).addEventListener('input', () => {
+      const v = cpInput(i).value.trim();
+      if (i === 0) { $('lcE1').value = v; }   // E1 is the shared E1 field; E2–E6 edits are kept
+      else cvals[i] = v === '' ? null : v;
+      recalcIfShown(); save();
+    });
+  }
+  $('lcE1').addEventListener('input', () => { if (customOn) { cpInput(0).value = $('lcE1').value; recalcIfShown(); } });
+
   // ── Persistence ────────────────────────────────────────────
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
         capital: $('lcCapital').value, pair: $('lcPair').value, side, e1: $('lcE1').value,
         lev: lev.value, minOrder: $('lcMinOrder').value, adv: readParams(),
+        customOn, customPrices: cvals,
       }));
     } catch { /* storage unavailable */ }
   }
@@ -394,6 +486,8 @@ if (typeof module !== 'undefined' && module.exports) {
       if (s.lev)     lev.value = s.lev;
       if (s.minOrder) $('lcMinOrder').value = s.minOrder;
       if (s.side)    setSide(s.side);
+      if (Array.isArray(s.customPrices)) s.customPrices.forEach((v, i) => { if (i > 0 && i < N_CUSTOM && v !== null && v !== '' && Number.isFinite(parseFloat(v))) cvals[i] = String(v); });
+      if (s.customOn) setCustomOn(true);
       if (s.adv) for (const [k, id] of Object.entries(advIds)) if (s.adv[k] != null) $(id).value = s.adv[k];
     }
     updateLev();
@@ -413,7 +507,19 @@ if (typeof module !== 'undefined' && module.exports) {
     if (!e1Price || e1Price <= 0) { warn('⚠ Enter the E1 price (Equilibrium or Discount level).'); $('lcResults').hidden = true; return; }
 
     const params = readParams();
-    const c = calcLadder({ capital, leverage, e1Price, side, ...params });
+    const c = calcLadder({ capital, leverage, e1Price, side, ...params, customPrices: customPricesArg() });
+    customErrShown = false;
+    if (customOn) {
+      showCustomErrors(c.error || null);
+      customErrShown = !!c.error;
+      syncCustomInputs(c.rows);
+      if (c.error) {
+        warn('⚠ ' + esc(c.error.message));
+        $('lcResults').hidden = true;
+        save();
+        return;
+      }
+    }
     const ref = e1Price;
     const isLong = c.side === 'long';
 
@@ -435,7 +541,7 @@ if (typeof module !== 'undefined' && module.exports) {
       <div class="lc-entry">
         <div class="lc-entry-top">
           <span class="lc-entry-tag">E${r.n}</span>
-          <span class="lc-entry-cap">${fmtM(r.margin)} · ${fmtM(r.notional)}</span>
+          <span class="lc-entry-cap">${fmtM(r.margin)} · ${fmtM(r.notional)}${customOn ? `<span class="lc-badge ${c.customEntries && c.customEntries.includes(r.n) ? 'custom' : ''}">${c.customEntries && c.customEntries.includes(r.n) ? 'Custom' : 'Model'}</span>` : ''}</span>
           <span class="lc-entry-price">${fmtP(r.price, ref)}</span>
           <span class="lc-entry-dist">${r.n === 1 ? 'E1' : fmtPct(r.distFromE1)}</span>
         </div>
@@ -482,7 +588,7 @@ if (typeof module !== 'undefined' && module.exports) {
             <tr class="lc-bt-note"><td colspan="3">${v.note}</td></tr>`).join('')}
           </tbody>
         </table>
-        <div class="lc-bt-foot">Bitunix 5m · 1 Jan 2025 – 5 Nov 2026 · one account trading continuously.${isDefault(params) ? '' : ' <b>Reference uses default parameters, not your custom ones.</b>'} Past results do not guarantee future results.</div>`;
+        <div class="lc-bt-foot">Bitunix 5m · 1 Jan 2025 – 5 Nov 2026 · one account trading continuously.${isDefault(params) && !(c.customEntries && c.customEntries.some(n => n > 1)) ? '' : ' <b>Reference uses default parameters and model entry prices, not your custom ones.</b>'} Past results do not guarantee future results.</div>`;
       $('lcBacktestWrap').hidden = false;
     } else {
       $('lcBacktestWrap').hidden = true;
@@ -497,7 +603,9 @@ if (typeof module !== 'undefined' && module.exports) {
     save();
   }
 
-  function recalcIfShown() { if (!$('lcResults').hidden) render(); }
+  // Results hidden by a custom-price error must come back as soon as the price is fixed
+  let customErrShown = false;
+  function recalcIfShown() { if (!$('lcResults').hidden || customErrShown) render(); }
 
   // ── Probability simulation ─────────────────────────────────
   let lastPlan = null, simRunning = false;
