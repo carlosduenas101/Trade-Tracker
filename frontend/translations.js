@@ -41,6 +41,9 @@ const TRANSLATIONS = {
     'metric.avgentries':        'Avg Entries',
     'metric.avgduration':       'Avg Duration',
     'metric.avgpnl':            'Avg P&L',
+    'metric.avgdaily':          'Avg Daily',
+    'metric.avgweekly':         'Avg Weekly',
+    'metric.avgmonthly':        'Avg Monthly',
     /* Metric sub-texts */
     'metric.realized':          'Realized',
     'metric.peaktotrough':      'Peak to trough',
@@ -52,6 +55,7 @@ const TRANSLATIONS = {
     'metric.closedpos':         'Closed positions',
     'metric.pertrade':          'Per trade average',
     'metric.entriespertrade':   'Entries per trade',
+    'metric.avgroe.short':      'avg ROE',
     /* Chart */
     'chart.title':              'Cumulative P&L',
     'chart.positive':           'Positive',
@@ -187,6 +191,9 @@ const TRANSLATIONS = {
     'metric.avgentries':        'Entradas prom.',
     'metric.avgduration':       'Duración prom.',
     'metric.avgpnl':            'P&L Promedio',
+    'metric.avgdaily':          'Prom. Diario',
+    'metric.avgweekly':         'Prom. Semanal',
+    'metric.avgmonthly':        'Prom. Mensual',
     /* Metric sub-texts */
     'metric.realized':          'Realizado',
     'metric.peaktotrough':      'Pico a valle',
@@ -198,6 +205,7 @@ const TRANSLATIONS = {
     'metric.closedpos':         'Posiciones cerradas',
     'metric.pertrade':          'Promedio por trade',
     'metric.entriespertrade':   'Entradas por trade',
+    'metric.avgroe.short':      'ROE prom.',
     /* Chart */
     'chart.title':              'P&L Acumulado',
     'chart.positive':           'Positivo',
@@ -333,6 +341,9 @@ const TRANSLATIONS = {
     'metric.avgentries':        'Entrées moy.',
     'metric.avgduration':       'Durée moy.',
     'metric.avgpnl':            'P&L Moyen',
+    'metric.avgdaily':          'Moy. Journalière',
+    'metric.avgweekly':         'Moy. Hebdomadaire',
+    'metric.avgmonthly':        'Moy. Mensuelle',
     /* Metric sub-texts */
     'metric.realized':          'Réalisé',
     'metric.peaktotrough':      'Sommet à creux',
@@ -344,6 +355,7 @@ const TRANSLATIONS = {
     'metric.closedpos':         'Positions fermées',
     'metric.pertrade':          'Moyenne par trade',
     'metric.entriespertrade':   'Entrées par trade',
+    'metric.avgroe.short':      'ROE moy.',
     /* Chart */
     'chart.title':              'P&L Cumulé',
     'chart.positive':           'Positif',

@@ -205,6 +205,58 @@ def calculate_streak(trades: list[TradeItem]) -> int:
     return streak
 
 
+def _period_key(dt, period: str) -> tuple:
+    """Return a grouping key for the calendar day/week/month containing dt."""
+    if period == "day":
+        return (dt.year, dt.month, dt.day)
+    if period == "week":
+        iso_year, iso_week, _ = dt.isocalendar()
+        return (iso_year, iso_week)
+    return (dt.year, dt.month)  # "month"
+
+
+def calculate_period_averages(trades: list[TradeItem]) -> dict:
+    """
+    Calculate average $ P&L and average ROE% per active calendar day/week/month.
+
+    Trades are grouped into calendar-day, ISO calendar-week and calendar-month
+    buckets using close_time. Each bucket sums the P&L and ROE% of the trades
+    closed within it; the reported average is that sum averaged only across
+    buckets that actually contain a trade ("active" periods), never against
+    empty calendar periods. Caller controls scope by passing either the full
+    trade history or an already date-filtered subset.
+
+    Returns all-zero values when the trade list is empty.
+    """
+    keys = ("day", "week", "month")
+    buckets: dict[str, dict[tuple, dict[str, float]]] = {k: {} for k in keys}
+
+    for trade in trades:
+        close_time = _get(trade, "close_time")
+        if close_time is None:
+            continue
+        pnl = _get(trade, "pnl", 0.0) or 0.0
+        roe = _get(trade, "roe")
+
+        for period in keys:
+            bucket = buckets[period].setdefault(_period_key(close_time, period), {"pnl": 0.0, "roe": 0.0})
+            bucket["pnl"] += pnl
+            if roe is not None:
+                bucket["roe"] += roe
+
+    result = {}
+    for period, label in zip(keys, ("daily", "weekly", "monthly")):
+        periods = list(buckets[period].values())
+        if not periods:
+            result[f"avg_{label}_pnl"] = 0.0
+            result[f"avg_{label}_roe"] = 0.0
+            continue
+        result[f"avg_{label}_pnl"] = round(sum(b["pnl"] for b in periods) / len(periods), 8)
+        result[f"avg_{label}_roe"] = round(sum(b["roe"] for b in periods) / len(periods), 4)
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Aggregate convenience function
 # ---------------------------------------------------------------------------
