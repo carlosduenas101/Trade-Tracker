@@ -32,6 +32,11 @@
 
   --yellow:         #ffd700;
   --yellow-dim:     rgba(255, 215, 0, 0.12);
+  --yellow-border:  rgba(255, 215, 0, 0.35);
+
+  --info:           #00cfff;
+  --info-dim:       rgba(0, 207, 255, 0.12);
+  --info-border:    rgba(0, 207, 255, 0.35);
 
   --sync-color:     #39ff14;
   --sync-hover:     #57ff3a;
@@ -81,6 +86,11 @@
 
   --yellow:         #f59e0b;
   --yellow-dim:     rgba(245, 158, 11, 0.12);
+  --yellow-border:  rgba(245, 158, 11, 0.40);
+
+  --info:           #38bdf8;
+  --info-dim:       rgba(56, 189, 248, 0.12);
+  --info-border:    rgba(56, 189, 248, 0.35);
 
   --sync-color:     #9b5de5;
   --sync-hover:     #7c3aed;
@@ -119,6 +129,11 @@
 
   --yellow:         #c084fc;
   --yellow-dim:     rgba(192, 132, 252, 0.13);
+  --yellow-border:  rgba(192, 132, 252, 0.38);
+
+  --info:           #2dd4bf;
+  --info-dim:       rgba(45, 212, 191, 0.14);
+  --info-border:    rgba(45, 212, 191, 0.38);
 
   --sync-color:     #7b2fff;
   --sync-hover:     #9d52ff;
@@ -589,6 +604,7 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 /* ════════════════════════════════════════════════════════════
    POOL FUND DASHBOARD
    ════════════════════════════════════════════════════════════ */
+.pool-section[hidden] { display: none; }
 .pool-section {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -622,11 +638,12 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 /* Summary cards */
 .pool-summary {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
   margin-bottom: 16px;
 }
-@media (max-width: 900px) { .pool-summary { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1000px) { .pool-summary { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px)  { .pool-summary { grid-template-columns: repeat(2, 1fr); } }
 
 .pool-card {
   background: var(--bg-elevated);
@@ -650,6 +667,52 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 }
 .pool-card-accent { color: var(--accent-primary); }
 .pool-card-green  { color: var(--green); }
+.pool-card-negative { color: var(--red); }
+.pool-card-sub {
+  margin-top: 5px;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+/* Owner equity — account value against what the fund owes */
+.pool-equity-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.pool-equity-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.pool-summary-owner { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { .pool-summary-owner { grid-template-columns: repeat(2, 1fr); } }
+
+/* Owner equity underwater — loud on purpose, never clamped or hidden */
+.pool-card-danger {
+  border-color: var(--red-border);
+  background: var(--red-dim);
+}
+.pool-equity-warning {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--red-dim);
+  border: 1px solid var(--red-border);
+  color: var(--red);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.pool-snapshot-wrap { margin-top: 16px; }
+.pool-snapshot-wrap .pool-growth-head { padding: 10px 14px 0; }
 
 /* Contributors table */
 .pool-table-wrap {
@@ -713,18 +776,329 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   transition: width 0.3s ease;
 }
 
-.pool-del-btn {
+/* Date picker + payout type toggle in the add row */
+.pool-input-date { max-width: 150px; flex: none; }
+
+.pool-type-toggle {
+  display: flex;
+  flex: none;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.pool-type-btn {
+  background: var(--bg-elevated);
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 12px;
+  transition: background 0.15s, color 0.15s;
+}
+.pool-type-btn:hover { color: var(--text-primary); }
+.pool-type-btn.active {
+  background: var(--green-dim);
+  color: var(--accent-primary);
+}
+
+/* Payout type + status badges in the table */
+.pool-type-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-family: var(--font-sans, inherit);
+}
+.pool-type-badge.type-monthly {
+  color: var(--accent-primary);
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+}
+.pool-type-badge.type-compound {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+}
+/* Owner capital — not an investment, so it reads differently from both
+   payout types and carries no accrual affordances. */
+.pool-type-badge.type-owner {
+  color: var(--info);
+  background: var(--info-dim);
+  border: 1px solid var(--info-border);
+}
+
+.pool-row-closed td      { opacity: 0.55; }
+
+/* Status badges — investor table "Next Due / Status" column */
+.pool-status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.pool-status-compounding,
+.pool-status-owner,
+.pool-status-withdrawn,
+.pool-status-ontrack,
+.pool-status-duesoon,
+.pool-status-overdue {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-family: var(--font-sans, inherit);
+  white-space: nowrap;
+}
+.pool-status-compounding {
+  color: var(--accent-primary);
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+}
+.pool-status-owner {
+  color: var(--info);
+  background: var(--info-dim);
+  border: 1px solid var(--info-border);
+}
+.pool-status-ontrack {
+  color: var(--info);
+  background: var(--info-dim);
+  border: 1px solid var(--info-border);
+}
+.pool-status-duesoon {
+  color: var(--yellow);
+  background: var(--yellow-dim);
+  border: 1px solid var(--yellow-border);
+}
+.pool-status-overdue {
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px solid var(--red-border);
+}
+.pool-status-withdrawn {
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+}
+
+/* Thin payout-cycle progress bar under the status badge (monthly rows only) */
+.pool-cycle-bar {
+  width: 72px;
+  height: 4px;
+  background: var(--border-subtle);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.pool-cycle-bar-fill {
+  height: 100%;
+  background: var(--info);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.pool-action-btn {
+  border: 1px solid var(--green-border);
+  background: var(--green-dim);
+  color: var(--accent-primary);
+  font-family: var(--font-sans, inherit);
+}
+.pool-withdraw-btn {
+  border-color: var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+.pool-withdraw-btn:hover { color: var(--red); border-color: var(--red); }
+
+.pool-error {
+  margin-top: 10px;
+  color: var(--red);
+  font-size: 0.8rem;
+}
+
+/* Clicking anywhere on a contribution row toggles its inline detail panel */
+.pool-row { cursor: pointer; }
+.pool-row:hover { background: var(--bg-hover); }
+.pool-inv-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pool-row:hover .pool-inv-link { color: var(--accent-primary); }
+.pool-inv-caret {
+  display: inline-block;
+  font-size: 0.7em;
+  color: var(--text-muted);
+  transition: color 0.15s, transform 0.2s ease;
+  transform: rotate(0deg);
+}
+.pool-row:hover .pool-inv-caret { color: var(--accent-primary); }
+.pool-inv-caret-open { transform: rotate(90deg); }
+.pool-row-expanded { background: var(--bg-hover); }
+
+/* Paid / owed badges (ledger detail) */
+.pool-paid-badge, .pool-owed-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-family: var(--font-sans, inherit);
+}
+.pool-paid-badge {
+  color: var(--accent-primary);
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+}
+.pool-owed-badge {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+}
+
+/* Per-period action select + balance display (inline detail panel) */
+.pool-action-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-family: var(--font-sans, inherit);
+  padding: 3px 6px;
+  cursor: pointer;
+}
+.pool-action-select:hover { border-color: var(--green-border); }
+.pool-balance-cell { font-size: 0.75rem; white-space: nowrap; }
+.pool-balance-arrow { color: var(--text-muted); padding: 0 2px; }
+
+/* Inline detail panel — expands under a contribution row when its
+   investor name is clicked; combines editable terms + payment history */
+.pool-detail-row td { padding: 0; border-bottom: 1px solid var(--border-subtle); }
+.pool-detail-panel {
+  padding: 16px 20px 20px;
+  background: var(--bg-elevated);
+  animation: fadeIn 0.15s ease;
+}
+.pool-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.pool-detail-inv { font-weight: 700; font-size: 0.95rem; }
+.pool-inv-edit-link {
+  margin-left: auto;
   background: none;
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.85rem;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
-  transition: color 0.15s;
-  line-height: 1;
+  font-size: 0.75rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0;
 }
-.pool-del-btn:hover { color: var(--red); }
+.pool-inv-edit-link:hover { color: var(--accent-primary); }
+
+.pool-detail-terms {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--border-subtle);
+}
+.pool-detail-terms label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pool-detail-terms input,
+.pool-detail-terms select { min-width: 140px; }
+.pool-detail-error { margin-bottom: 12px; }
+
+.pool-ledger-inline { background: var(--bg-surface, transparent); }
+
+/* Editable ledger row cells (amount / paid date) inside the payment history table */
+.pool-ledger-inline .pool-edit-input {
+  padding: 3px 6px;
+  font-size: 0.72rem;
+  min-width: 0;
+}
+.pool-ledger-inline input[type="date"].pool-edit-input { min-width: 118px; }
+.pool-ledger-inline input[type="number"].pool-edit-input { width: 90px; }
+.pool-ledger-empty-cell {
+  text-align: center !important;
+  color: var(--text-muted);
+  padding: 14px !important;
+  font-family: var(--font-sans, inherit) !important;
+}
+
+/* Growth chart — pool value vs savings benchmark */
+.pool-growth-wrap {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 16px 10px;
+  margin: 16px 0;
+  background: var(--bg-elevated);
+}
+.pool-growth-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pool-growth-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.pool-growth-legend {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pool-growth-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-left: 10px;
+}
+.pool-growth-dot:first-child { margin-left: 0; }
+.pool-growth-dot-pool  { background: var(--accent-primary); box-shadow: 0 0 5px var(--accent-primary); }
+.pool-growth-dot-bench { background: var(--text-muted); }
+.pool-growth-canvas-wrap { height: 220px; }
+
+/* Concentration risk warning below the donut legend */
+.pool-concentration-warning {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--yellow-dim);
+  border: 1px solid var(--yellow-border);
+  color: var(--yellow);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
 
 /* Pool glassmorphic SVG pie */
 .pool-chart-wrap {
@@ -784,6 +1158,20 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   font-weight: 700;
   pointer-events: none;
 }
+/* Deficit mode: the account total is the bad news, so it reads red and the
+   shortfall sits directly beneath it rather than in a legend footnote. */
+.pie-clabel-deficit { fill: var(--red); }
+.pie-cvalue-deficit { fill: var(--red); }
+.pie-cdeficit {
+  font-size: 10px;
+  fill: var(--red);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  pointer-events: none;
+}
+/* The deficit wedge is pushed out and stays out — it is not a claim among
+   others, it is the part of the liability the account cannot cover. */
+.pie-group-deficit .pie-sheen { opacity: 0.25; }
 
 /* Floating tooltip */
 .pie-tooltip {
@@ -850,11 +1238,70 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   text-overflow: ellipsis;
   max-width: 105px;
 }
-.pool-legend-pct {
+.pool-legend-value {
   margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+.pool-legend-pct {
   font-family: var(--font-mono);
   color: var(--accent-primary);
   font-size: 0.75rem;
+  min-width: 46px;
+  text-align: right;
+}
+.pool-legend-owner .pool-legend-name { color: var(--accent-primary); }
+.pool-legend-deficit .pool-legend-name,
+.pool-legend-deficit .pool-legend-pct { color: var(--yellow); }
+
+/* Chart side column — badges above the legend */
+.pool-chart-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 150px;
+  /* Without a cap the legend spans the whole card and the value column ends
+     up marooned against the far edge, disconnected from its swatch. */
+  max-width: 340px;
+}
+.pool-chart-badges:empty { display: none; }
+.pool-stale-badge,
+.pool-deficit-note {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 3px 9px;
+  margin-bottom: 6px;
+}
+/* display:inline-block above beats the [hidden] user-agent rule, which would
+   leave an empty pill outline painted whenever the badge is off. */
+.pool-stale-badge[hidden],
+.pool-deficit-note[hidden] { display: none; }
+.pool-stale-badge {
+  color: var(--yellow);
+  background: var(--yellow-dim);
+  border: 1px solid var(--yellow-border);
+}
+.pool-deficit-note {
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px solid var(--red-border);
+}
+.pool-card-sub-stale { color: var(--yellow); }
+
+/* No snapshot yet — a ring without a denominator would misreport every
+   share, so prompt for the reading instead of drawing one. */
+.pool-chart-empty {
+  padding: 26px 16px;
+  margin: 12px 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
 }
 @media (max-width: 600px) {
   .pool-chart-wrap { flex-direction: column; }
@@ -1260,6 +1707,19 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 }
 
 .tf-apply-btn { width: 100%; justify-content: center; }
+
+/* Toolbar quick-range buttons (7/30/90 days) */
+.quick-range-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.quick-range-btn.is-active {
+  background: var(--green-dim);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
 
 /* Date inputs inside the panel — full width, always show calendar icon */
 .tf-date-input {
@@ -1735,6 +2195,17 @@ textarea.input-field { resize: vertical; min-height: 80px; }
     justify-content: center;
     min-width: 0;
   }
+  .filter-group .quick-range-group {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+  .filter-group .quick-range-group .btn {
+    flex: 1 1 calc(33.33% - 4px);
+    justify-content: center;
+    min-width: 0;
+    font-size: 0.78rem;
+    padding: 6px 4px;
+  }
 
   /* Action buttons: 2-column grid, Add Trade full width */
   .action-group {
@@ -1780,16 +2251,21 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   /* ── 8. FUND POOL ───────────────────────────────────────── */
   .pool-section { padding: 14px; }
   .pool-summary { grid-template-columns: repeat(2, 1fr); }
-  .pool-add-row {
+  .pool-add-row,
+  .pool-equity-row {
     flex-direction: column;
     gap: 8px;
+    align-items: stretch;
   }
   .pool-input,
-  .pool-input-amt {
+  .pool-input-amt,
+  .pool-input-date,
+  .pool-type-toggle {
     max-width: 100%;
     width: 100%;
     flex: 1 1 100%;
   }
+  .pool-type-btn { flex: 1; }
   .pool-chart-wrap {
     flex-direction: column;
     align-items: center;
@@ -1892,6 +2368,36 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   .fib-close-btn { display: flex; }
   .fib-notch { display: flex; }
   .fib-notch.hidden { display: none; }
+
+  /* ── 13. ADVANCE CALCULATOR — centered card, mirrors block 12 ─
+     Same !important requirement as .fib-calc above: the base .adv-calc
+     rule sits earlier in the file but .fib-calc's own base rule sits
+     LATER (~line 2398), and it would otherwise win on the shared
+     `.fib-calc` class this panel also carries.                    */
+  .adv-calc {
+    position: fixed !important;
+    top: 62px !important;
+    left: 50% !important;
+    width: min(420px, calc(100vw - 24px)) !important;
+    max-height: calc(100dvh - 82px) !important;
+    bottom: auto !important;
+    flex-shrink: 0;
+    z-index: 500;
+    border-radius: var(--radius-xl) !important;
+    border: 1px solid var(--border-default) !important;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px var(--border-subtle);
+    transform: translateX(-100vw);
+    transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .adv-calc.calc-open { transform: translateX(-50%) !important; }
+
+  /* Stack the slots and drop the ladder to a single scrollable column */
+  .adv-slots   { grid-template-columns: 1fr; }
+  .adv-globals { grid-template-columns: 1fr; }
+  .adv-calc-body { padding: 16px; gap: 14px; }
+  .adv-notch { top: calc(50% + 88px); }
 }
 
 /* ── SMALL SCREENS ≤ 480px ──────────────────────────────────── */
@@ -2045,6 +2551,7 @@ textarea.input-field { resize: vertical; min-height: 80px; }
 }
 
 /* ── Results ───────────────────────────────────────────────── */
+.fib-results[hidden] { display: none; }
 .fib-results {
   display: flex;
   flex-direction: column;
@@ -2696,3 +3203,507 @@ textarea.input-field { resize: vertical; min-height: 80px; }
   padding: 4px 10px;
   font-size: 0.78rem;
 }
+
+/* NOTE ON ORDER: this block must stay at the END of the file. The base
+   .fib-calc rule (width: 300px, position: sticky) lives in the FIB
+   MULTI-ENTRY CALCULATOR section further up, and .adv-calc carries the
+   .fib-calc class too — an equal-specificity match, so the later rule wins.
+   Placed any earlier, the panel silently collapses to a 300px sidebar. The
+   mobile @media block still needs !important because it sits above that
+   base rule. */
+
+/* ════════════════════════════════════════════════════════════
+   ADVANCE CALCULATOR — multi-strategy entry cascade simulator
+
+   Structurally parallel to the Fib calculator, with three differences:
+     - the notch is on the LEFT edge and visible on DESKTOP too (the Fib
+       notch is a mobile-only affordance for a panel that is otherwise a
+       permanent sidebar; this panel has no sidebar form, so its tab is
+       the only way in at any width);
+     - the panel is an OVERLAY at every width, so its backdrop is active
+       on desktop as well;
+     - it is wide, because it holds three strategy slots side by side.
+   Everything else reuses .fib-* classes so all three themes apply for free.
+   ════════════════════════════════════════════════════════════ */
+
+/* Notch — mirror of .fib-notch, flipped to the left edge */
+.adv-notch {
+  display: flex;            /* visible at ALL widths, unlike .fib-notch */
+  right: auto;
+  left: 0;
+  top: calc(50% + 88px);    /* clear of the Fib notch when both are on screen */
+  border-radius: 0 10px 10px 0;
+  box-shadow: 3px 0 16px rgba(0,0,0,0.35), 0 0 10px var(--accent-primary);
+}
+.adv-notch:hover {
+  width: 30px;
+  box-shadow: 4px 0 20px rgba(0,0,0,0.45), 0 0 14px var(--accent-primary);
+}
+.adv-notch:active { width: 22px; }
+.adv-notch.hidden { display: none; }
+
+/* Backdrop — the base .fib-backdrop is display:none until the mobile block,
+   so re-enable it here for every width. */
+.adv-backdrop { display: block; }
+
+/* Panel — slides in from the LEFT as an overlay */
+.adv-calc {
+  position: fixed;
+  top: 72px;
+  left: 0;
+  width: min(1080px, calc(100vw - 32px));
+  max-height: calc(100vh - 92px);
+  z-index: 500;
+  border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
+  box-shadow: var(--shadow-modal);
+  transform: translateX(-100%);
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.adv-calc.calc-open { transform: translateX(0); }
+
+/* The shared .fib-close-btn is display:none until the mobile block; this
+   panel is a drawer at every width, so its close button always shows. */
+.adv-close-btn { display: flex; }
+
+.adv-calc-body { gap: 16px; }
+
+/* Global inputs sit in a row on wide screens rather than a 300px column */
+.adv-globals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 16px;
+}
+
+/* ── Strategy slots ─────────────────────────────────────────── */
+.adv-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.adv-slot {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.adv-slot-off { opacity: 0.5; }
+.adv-slot-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.adv-slot-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.adv-slot-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+.adv-slot-toggle {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 20px;
+  cursor: pointer;
+  background: var(--green-dim);
+  color: var(--accent-primary);
+  border: 1px solid var(--green-border);
+  font-family: var(--font-sans);
+}
+.adv-slot-off .adv-slot-toggle {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-default);
+}
+
+/* 4-way mode toggle in a 2x2 grid. Wrapping a flex row does not work here:
+   .fib-toggle-group carries gap:6px, so two children at flex-basis:50% overflow
+   the line by the gap and every button drops onto its own row. */
+.adv-mode-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+.adv-mode-group .fib-toggle {
+  font-size: 0.68rem;
+  padding: 7px 4px;
+}
+
+/* Compact per-entry rows inside a slot */
+.adv-entry-row {
+  display: grid;
+  grid-template-columns: 26px 1fr 1fr;
+  align-items: center;
+  gap: 6px;
+}
+.adv-entry-tag {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+.adv-mini-input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 7px;
+  font-size: 0.74rem;
+  font-family: var(--font-mono);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+}
+.adv-mini-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+.adv-mini-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+}
+.adv-mini-head {
+  display: grid;
+  grid-template-columns: 26px 1fr 1fr;
+  gap: 6px;
+  padding-bottom: 2px;
+}
+
+.adv-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.adv-inline-row .adv-mini-input { flex: 1; }
+
+.adv-btn-ghost {
+  font-size: 0.68rem;
+  padding: 6px 9px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.adv-btn-ghost:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+/* Non-blocking weight-sum warning */
+.adv-warn {
+  font-size: 0.66rem;
+  color: var(--yellow);
+  background: var(--yellow-dim);
+  border: 1px solid var(--yellow-border);
+  border-radius: var(--radius-md);
+  padding: 5px 8px;
+}
+/* Bad input in ONE slot must not take the panel down with it */
+.adv-error {
+  font-size: 0.68rem;
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px solid var(--red-border);
+  border-radius: var(--radius-md);
+  padding: 6px 9px;
+}
+
+/* Per-slot computed output */
+.adv-out {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 10px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+.adv-out-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.7rem;
+}
+.adv-out-k { color: var(--text-muted); }
+.adv-out-v { font-family: var(--font-mono); color: var(--text-primary); font-weight: 600; }
+
+/* Monte Carlo histogram + stat chips */
+.adv-hist-wrap { margin-top: 4px; }
+.adv-hist-canvas-wrap { height: 130px; position: relative; }
+.adv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.adv-chip {
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  padding: 3px 7px;
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.adv-chip b { color: var(--text-primary); font-weight: 700; }
+
+/* ── Price ladder ───────────────────────────────────────────── */
+.adv-ladder-wrap {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+.adv-ladder { width: 100%; overflow-x: auto; }
+.adv-ladder svg { display: block; width: 100%; height: auto; }
+.adv-ladder-empty {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 18px 0;
+}
+.adv-ladder-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 0.66rem;
+  color: var(--text-secondary);
+}
+.adv-lg { display: inline-flex; align-items: center; gap: 5px; }
+.adv-lg-bar { width: 2px; height: 11px; display: inline-block; border-radius: 1px; }
+.adv-lg-wavg { background: var(--text-primary); }
+.adv-lg-tp   { background: var(--green); }
+.adv-lg-sl   { background: var(--red); }
+.adv-lg-note { color: var(--text-muted); font-style: italic; }
+
+/* ── Comparison table ───────────────────────────────────────── */
+.adv-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.adv-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+.adv-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+.adv-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.adv-table tr:last-child td { border-bottom: none; }
+.adv-table .adv-td-name { font-family: var(--font-sans); font-weight: 600; }
+.adv-table .adv-td-empty {
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  text-align: center;
+}
+.adv-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+
+/* ════════════════════════════════════════════════════════════
+   LIQ LADDER MODE (calculator)
+   ════════════════════════════════════════════════════════════ */
+.lc-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lc-mode[hidden] { display: none; }
+.lc-mode-group .fib-toggle { padding: 8px 4px; }
+.lc-intro {
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--accent-primary);
+  padding: 2px 0 2px 8px;
+}
+.lc-presets { margin-top: 8px; }
+.lc-adv {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+.lc-adv summary { cursor: pointer; font-weight: 600; padding: 2px 0; }
+.lc-adv-grid {
+  display: grid;
+  grid-template-columns: 1fr 86px;
+  gap: 6px 8px;
+  align-items: center;
+  margin: 8px 0 6px;
+}
+.lc-adv-grid label { font-size: 0.66rem; color: var(--text-secondary); }
+.lc-adv-grid .fib-input { padding: 5px 7px; font-size: 0.72rem; }
+.lc-reset { font-size: 0.66rem; padding: 0; }
+.lc-check { display: flex; align-items: center; gap: 7px; font-size: 0.72rem; color: var(--text-primary); cursor: pointer; }
+.lc-custom-box[hidden] { display: none; }
+.lc-custom-box { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.lc-custom-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: start; }
+.lc-custom-grid label { font-size: 0.68rem; font-weight: 700; color: var(--accent-primary); padding-top: 7px; }
+.lc-custom-grid .fib-input { padding: 5px 7px; font-size: 0.72rem; }
+.lc-custom-grid .fib-input.invalid { border-color: var(--red, #e5484d); }
+.lc-cp-err { display: block; min-height: 0; font-size: 0.62rem; color: var(--red, #e5484d); margin-top: 2px; }
+.lc-cp-err:empty { display: none; }
+.lc-badge { margin-left: 6px; padding: 0 5px; border-radius: 8px; font-size: 0.55rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; border: 1px solid var(--border-default); color: var(--text-secondary); }
+.lc-badge.custom { color: var(--accent-primary); border-color: var(--accent-primary); }
+.lc-ladder { display: flex; flex-direction: column; gap: 6px; }
+.lc-entry {
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.68rem;
+}
+.lc-entry-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: baseline;
+}
+.lc-entry-tag   { font-weight: 700; color: var(--accent-primary); grid-row: 1 / 3; align-self: center; }
+.lc-entry-cap   { color: var(--text-secondary); }
+.lc-entry-price { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); text-align: right; }
+.lc-entry-dist  { grid-column: 3; font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-secondary); text-align: right; }
+.lc-entry-sub {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+}
+.lc-entry-sub b { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); }
+.lc-entry-sub b.fib-red, .lc-entry-sub b.fib-green { color: inherit; }
+.lc-roe { color: var(--text-secondary); font-size: 0.6rem; margin-left: 2px; }
+.lc-bt-current td { background: var(--green-dim); }
+.lc-bt-note td {
+  text-align: left !important;
+  font-family: inherit !important;
+  font-size: 0.6rem;
+  color: var(--text-secondary) !important;
+  padding-top: 0 !important;
+}
+.lc-bt-foot {
+  margin-top: 6px;
+  font-size: 0.6rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* ── Liq Ladder: probability simulation ─────────────────── */
+.lc-sim { display: flex; flex-direction: column; gap: 8px; }
+.lc-sim-controls {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 8px;
+  align-items: center;
+}
+.lc-sim-controls label { font-size: 0.66rem; color: var(--text-secondary); }
+.lc-sim-controls .fib-input { padding: 6px 28px 6px 8px; font-size: 0.72rem; }
+.lc-sim-check {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.lc-sim-check input { margin-top: 2px; accent-color: var(--accent-primary); }
+.lc-sim-status {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+.lc-sim-status.error { color: var(--red); font-family: inherit; }
+.lc-sim-hero {
+  text-align: center;
+  padding: 8px 6px;
+  border: 1px solid var(--green-border);
+  background: var(--green-dim);
+  border-radius: var(--radius-sm);
+}
+.lc-sim-hero.bad { border-color: var(--red-border); background: var(--red-dim); }
+.lc-sim-hero-val { font-size: 1.35rem; font-weight: 700; font-family: var(--font-mono); color: var(--green); }
+.lc-sim-hero.bad .lc-sim-hero-val { color: var(--red); }
+.lc-sim-hero-lbl { font-size: 0.62rem; color: var(--text-secondary); margin-top: 2px; }
+.lc-sim-reach { display: flex; flex-wrap: wrap; gap: 4px; }
+.lc-sim-reach span {
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+.lc-sim-note { font-size: 0.6rem; line-height: 1.45; color: var(--text-secondary); }
+
+/* ── Liq Ladder: live paper trading ─────────────────────── */
+.lc-paper-bots { display: flex; flex-direction: column; gap: 8px; }
+.lc-paper-bot {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lc-paper-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.lc-paper-name { font-size: 0.72rem; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.lc-paper-badge {
+  flex: none;
+  font-size: 0.58rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+.lc-paper-badge.on { color: var(--green); border-color: var(--green-border); background: var(--green-dim); }
+.lc-paper-net { font-size: 1.1rem; font-weight: 700; font-family: var(--font-mono); }
+.lc-paper-lag { font-size: 0.58rem; color: var(--text-secondary); font-family: inherit; }
+.lc-paper-open { border-top: 1px dashed var(--border-default); padding-top: 4px; margin-top: 2px; }
+.lc-paper-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.lc-paper-del { color: var(--text-secondary); }
+.lc-paper-del.confirm { color: var(--red); font-weight: 600; }
+.lc-paper-hist { display: flex; flex-direction: column; font-size: 0.62rem; font-family: var(--font-mono); max-height: 220px; overflow-y: auto; }
+.lc-paper-hist-row { display: grid; grid-template-columns: 1.6fr 1fr 0.6fr 1fr; gap: 4px; padding: 2px 0; border-bottom: 1px solid var(--border-default); }
+.lc-paper-hist-row span:last-child { text-align: right; }
+.lc-paper-hist-head { color: var(--text-secondary); font-family: inherit; }
+.lc-paper-bot .fib-row { flex-wrap: wrap; gap: 2px 8px; }
+.lc-paper-bot .fib-val { margin-left: auto; text-align: right; }

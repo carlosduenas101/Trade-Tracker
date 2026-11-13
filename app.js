@@ -436,6 +436,12 @@ const dom = {
   metricAvgDurationSub: $('metricAvgDurationSub'),
   metricAvgPnl:         $('metricAvgPnl'),
   metricAvgPnlSub:      $('metricAvgPnlSub'),
+  metricAvgDaily:       $('metricAvgDaily'),
+  metricAvgDailySub:    $('metricAvgDailySub'),
+  metricAvgWeekly:      $('metricAvgWeekly'),
+  metricAvgWeeklySub:   $('metricAvgWeeklySub'),
+  metricAvgMonthly:     $('metricAvgMonthly'),
+  metricAvgMonthlySub:  $('metricAvgMonthlySub'),
 
   cardWinRate:    $('card-winRate'),
   cardPnl:          $('card-pnl'),
@@ -449,6 +455,9 @@ const dom = {
   cardAvgEntries:  $('card-avgEntries'),
   cardAvgDuration: $('card-avgDuration'),
   cardAvgPnl:      $('card-avgPnl'),
+  cardAvgDaily:    $('card-avgDaily'),
+  cardAvgWeekly:   $('card-avgWeekly'),
+  cardAvgMonthly:  $('card-avgMonthly'),
 
   // Table
   tradesBody:   $('tradesBody'),
@@ -562,7 +571,9 @@ async function apiFetch(path, options = {}) {
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { const j = await res.json(); msg = j.detail || j.message || msg; } catch (_) {}
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
   }
   if (res.status === 204) return null;
   return res.json();
@@ -677,13 +688,13 @@ function showToast(msg, type = 'info', duration = 3500) {
  */
 async function fetchMetrics(startDate, endDate) {
   // Skeleton loading
-  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricTotalLosses, dom.metricDrawdown, dom.metricMaxProfit, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration, dom.metricAvgPnl];
+  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricTotalLosses, dom.metricDrawdown, dom.metricMaxProfit, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration, dom.metricAvgPnl, dom.metricAvgDaily, dom.metricAvgWeekly, dom.metricAvgMonthly];
   cards.forEach(el => { el.textContent = '···'; el.classList.add('skeleton'); });
 
   try {
     const qs = buildQuery({ start_date: startDate, end_date: endDate });
     const data = await apiFetch(`/metrics${qs}`);
-    renderMetrics(data);
+    renderMetrics(data, startDate, endDate);
     setConnectionStatus('connected', t('header.connected'));
   } catch (err) {
     cards.forEach(el => { el.textContent = '—'; el.classList.remove('skeleton'); });
@@ -693,10 +704,23 @@ async function fetchMetrics(startDate, endDate) {
 }
 
 /**
+ * Count distinct calendar months touched by a [start, end] date-only range,
+ * inclusive. E.g. 2026-06-27 → 2026-07-27 spans June and July = 2.
+ */
+function monthsSpanned(startDate, endDate) {
+  const start = new Date(startDate);
+  const end   = new Date(endDate);
+  return (end.getUTCFullYear() - start.getUTCFullYear()) * 12
+       + (end.getUTCMonth() - start.getUTCMonth()) + 1;
+}
+
+/**
  * Render metric data into the DOM.
  * @param {Object} data
+ * @param {string|null} startDate ISO date string of the active filter (or null for "All time")
+ * @param {string|null} endDate   ISO date string of the active filter (or null for "All time")
  */
-function renderMetrics(data) {
+function renderMetrics(data, startDate, endDate) {
   const {
     win_rate,
     total_pnl,
@@ -798,6 +822,28 @@ function renderMetrics(data) {
   dom.metricAvgPnl.classList.remove('skeleton');
   dom.metricAvgPnlSub.textContent = t('metric.pertrade');
   applyCardColor(dom.cardAvgPnl, avg_pnl > 0 ? 'positive' : avg_pnl < 0 ? 'negative' : '');
+
+  // Avg Daily / Weekly / Monthly — $ and ROE% averaged per active calendar period
+  renderPeriodAverage(dom.metricAvgDaily, dom.metricAvgDailySub, dom.cardAvgDaily, data.avg_daily_pnl, data.avg_daily_roe);
+  renderPeriodAverage(dom.metricAvgWeekly, dom.metricAvgWeeklySub, dom.cardAvgWeekly, data.avg_weekly_pnl, data.avg_weekly_roe);
+
+  // Avg Monthly only means something once the filter covers more than 2
+  // calendar months — shorter windows collapse to 1-2 active month buckets,
+  // which just echoes the weekly/total figures rather than a real average.
+  // No explicit range ("All time") always shows it.
+  const monthlyMeaningful = !startDate || !endDate || monthsSpanned(startDate, endDate) > 2;
+  dom.cardAvgMonthly.style.display = monthlyMeaningful ? '' : 'none';
+  if (monthlyMeaningful) {
+    renderPeriodAverage(dom.metricAvgMonthly, dom.metricAvgMonthlySub, dom.cardAvgMonthly, data.avg_monthly_pnl, data.avg_monthly_roe);
+  }
+}
+
+/** Render a combined $ + ROE% metric card (used for the daily/weekly/monthly averages). */
+function renderPeriodAverage(valueEl, subEl, cardEl, pnl, roe) {
+  valueEl.textContent = pnl != null ? formatCurrency(pnl) : '—';
+  valueEl.classList.remove('skeleton');
+  subEl.textContent = roe != null ? `${formatPercent(roe)} ${t('metric.avgroe.short')}` : ' ';
+  applyCardColor(cardEl, pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : '');
 }
 
 function applyCardColor(cardEl, type) {
@@ -1568,6 +1614,8 @@ async function refreshAll() {
   await Promise.all([
     fetchMetrics(start_date, end_date),
     fetchTrades(start_date, end_date),
+    // Fund Pool registers this after its IIFE runs (see initPool)
+    window.refreshPool ? window.refreshPool() : Promise.resolve(),
   ]);
 }
 
@@ -1672,7 +1720,32 @@ function closePanel(panelEl, btnEl) {
 }
 
 function clearActivePreset() {
-  document.querySelectorAll('.tf-quick-btn').forEach(b => b.classList.remove('is-active'));
+  document.querySelectorAll('.tf-quick-btn, .quick-range-btn').forEach(b => b.classList.remove('is-active'));
+}
+
+/**
+ * Apply a rolling N-day range (today minus `days` through today) to both the
+ * toolbar date inputs and the table-filter panel inputs, then refresh.
+ * Shared by the toolbar quick-range buttons and the table filter's preset list.
+ */
+function applyQuickRange(days, label) {
+  const today = new Date();
+  const from  = new Date();
+  from.setDate(from.getDate() - days);
+  const todayStr = today.toISOString().slice(0, 10);
+  const fromStr  = from.toISOString().slice(0, 10);
+
+  dom.startDate.value   = fromStr;
+  dom.endDate.value     = todayStr;
+  dom.tfStartDate.value = fromStr;
+  dom.tfEndDate.value   = todayStr;
+  dom.tfDateLabel.textContent = label;
+
+  clearActivePreset();
+  document.querySelectorAll(`.tf-quick-btn[data-days="${days}"], .quick-range-btn[data-days="${days}"]`)
+    .forEach(b => b.classList.add('is-active'));
+
+  refreshAll();
 }
 
 function populateSymbolList(trades) {
@@ -1759,21 +1832,17 @@ function bindEvents() {
 
   document.querySelectorAll('.tf-quick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tf-quick-btn').forEach(b => b.classList.remove('is-active'));
-      btn.classList.add('is-active');
       const days = parseInt(btn.dataset.days, 10);
-      const today = new Date();
-      const from  = new Date();
-      from.setDate(from.getDate() - days);
-      const todayStr = today.toISOString().slice(0, 10);
-      const fromStr  = from.toISOString().slice(0, 10);
-      dom.startDate.value   = fromStr;
-      dom.endDate.value     = todayStr;
-      dom.tfStartDate.value = fromStr;
-      dom.tfEndDate.value   = todayStr;
-      dom.tfDateLabel.textContent = btn.textContent.trim();
+      applyQuickRange(days, btn.textContent.trim());
       closePanel(dom.tfDatePanel, dom.tfDateBtn);
-      refreshAll();
+    });
+  });
+
+  // ── Toolbar: quick range buttons (7/30/90 days) ──────────────
+  document.querySelectorAll('.toolbar .quick-range-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const days = parseInt(btn.dataset.days, 10);
+      applyQuickRange(days, btn.textContent.trim());
     });
   });
 
@@ -2616,29 +2685,251 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
    POOL FUND DASHBOARD
    ════════════════════════════════════════════════════════════ */
 (function initPool() {
-  const STORAGE_KEY = 'pool_contributors';
-  const RETURN_RATE = 0.05;
-
   const $id = (id) => document.getElementById(id);
-  const fmt = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Sign goes outside the symbol: -$2,538.13, not $-2,538.13. Owner equity
+  // and owner withdrawals are the only negatives here, and both matter.
+  const fmt = (n) => {
+    const v = Number(n);
+    return (v < 0 ? '-$' : '$') +
+      Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const fmtTicker = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
-  // ── State ──────────────────────────────────────────────────
-  let contributors = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  // Average days per monthly return cycle — only used to pace the cosmetic
+  // client-side "Returns Owed" ticker between refreshes. The real accrual is
+  // computed server-side per anniversary month (see fund_pool.sync_ledger);
+  // this constant never affects a stored value, only how fast the display
+  // ticks up before the next reconciliation.
+  const ACCRUAL_DAYS_IN_CYCLE = 30;
+
+  // Flag a single contributor holding more than this share of the active pool
+  const CONCENTRATION_WARNING_THRESHOLD_PCT = 50;
+
+  // Status badge turns amber ("due in Nd") once this many days or fewer remain
+  // until the next payout is due; above it, it's cyan ("on track, Nd left").
+  // Reused as the overdue grace window: a past-due unpaid return only flips
+  // the badge to red once it's been sitting unpaid for MORE than this many
+  // days — a 1-2 day gap is normal processing lag, not delinquency, and
+  // shouldn't mask the current cycle's own on-track/due-soon countdown.
+  const DUE_SOON_WINDOW_DAYS = 7;
+
+  // Whole days between two dates (accepts Date objects or ISO date strings)
+  function daysBetween(a, b) {
+    const MS_PER_DAY = 86400000;
+    return Math.round((new Date(b) - new Date(a)) / MS_PER_DAY);
+  }
+
+  // Thin payout-cycle progress bar (days elapsed / days in cycle) — shown for
+  // every active monthly row regardless of overdue status, since it tracks
+  // the CURRENT cycle, separate from any older unpaid backlog.
+  function renderCycleBar(c, todayIso) {
+    if (!c.current_period_start || !c.next_due_date) return '';
+    const cycleLen = Math.max(daysBetween(c.current_period_start, c.next_due_date), 1);
+    const elapsed  = Math.min(Math.max(daysBetween(c.current_period_start, todayIso), 0), cycleLen);
+    const pct = Math.round((elapsed / cycleLen) * 100);
+    return `<div class="pool-cycle-bar" title="${elapsed} of ${cycleLen} days into this cycle">
+      <div class="pool-cycle-bar-fill" style="width:${pct}%"></div>
+    </div>`;
+  }
+
+  // Badge + payout-cycle progress bar for an active monthly contribution
+  function renderMonthlyStatus(c) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    if (c.unpaid_ledger_id && c.oldest_unpaid_due_date) {
+      const daysLate = daysBetween(c.oldest_unpaid_due_date, todayIso);
+      if (daysLate > DUE_SOON_WINDOW_DAYS) {
+        return `<div class="pool-status-cell">
+          <span class="pool-status-overdue">Overdue</span>
+          ${renderCycleBar(c, todayIso)}
+        </div>`;
+      }
+    }
+
+    if (!c.next_due_date) {
+      return '<span class="pool-status-withdrawn">—</span>';
+    }
+
+    const daysLeft = daysBetween(todayIso, c.next_due_date);
+    const dueSoon  = daysLeft <= DUE_SOON_WINDOW_DAYS;
+    const badge = dueSoon
+      ? `<span class="pool-status-duesoon">Due in ${Math.max(daysLeft, 0)}d</span>`
+      : `<span class="pool-status-ontrack">On track, ${daysLeft}d left</span>`;
+
+    return `<div class="pool-status-cell">${badge}${renderCycleBar(c, todayIso)}</div>`;
+  }
+
+  // ── State — persisted server-side via the /fund-pool endpoints ─────────
+  let contributions  = [];   // rows from GET /fund-pool/contributions
+  let summary        = null; // GET /fund-pool/summary
+  let ownerSummary   = null; // GET /fund-pool/owner-summary
+  let snapshots      = [];   // GET /fund-pool/equity-snapshots
+  let composition    = null; // GET /fund-pool/equity-composition
+
+  // Mirrors SNAPSHOT_STALE_DAYS in backend/fund_pool.py — used only for the
+  // badge wording; the backend decides is_stale.
+  const SNAPSHOT_STALE_DAYS = 7;
+  let payoutType     = 'monthly';
+  let expandedId     = null; // contribution id whose inline detail panel is open
+
+  const fmtPct = (r) => (r * 100).toFixed(2) + '%';
+  const fmtSignedPct = (r) => (r >= 0 ? '+' : '') + fmtPct(r);
+
+  // ── Live "Returns Owed" ticker — cosmetic, reconciled on every load() ──
+  let tickerValue        = 0;
+  let tickerBase         = 0; // monthly_principal_base — the amount actively accruing
+  let tickerRatePerSecond = 0;
+
+  function reconcileTicker() {
+    if (!summary) return;
+    tickerValue = summary.returns_owed;
+    tickerBase = summary.monthly_principal_base || 0;
+    tickerRatePerSecond = (summary.monthly_return_rate || 0) / ACCRUAL_DAYS_IN_CYCLE / 86400;
+  }
+
+  setInterval(() => {
+    if (!summary || $id('poolSummary').hidden) return;
+    tickerValue += tickerBase * tickerRatePerSecond;
+    $id('poolReturns').textContent = fmtTicker(tickerValue);
+  }, 1000);
+
+  // ── Growth chart — pool value trend vs a flat-APY savings benchmark ────
+  let growthData  = null; // GET /fund-pool/growth
+  let growthChart = null;
+
+  function renderGrowthChart() {
+    const wrap = $id('poolGrowthWrap');
+    const points = growthData && growthData.points ? growthData.points : [];
+    wrap.hidden = points.length < 2;
+    if (points.length < 2) {
+      if (growthChart) { growthChart.destroy(); growthChart = null; }
+      return;
+    }
+
+    $id('poolBenchApy').textContent = ((growthData.savings_apy || 0) * 100).toFixed(1) + '%';
+
+    const labels = points.map(p => new Date(p.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
+    const poolValues  = points.map(p => p.pool_value);
+    const benchValues = points.map(p => p.benchmark_value);
+    // Index of the last non-projected point — segments after it render dashed
+    const lastHistoricalIndex = points.reduce((acc, p, i) => (p.projected ? acc : i), 0);
+
+    const theme = document.documentElement.getAttribute('data-theme');
+    const poolColor  = theme === 'purple' ? '#00e5ff' : '#39ff14';
+    const benchColor = theme === 'purple' ? '#c084fc' : '#8b949e';
+
+    const ctx = $id('poolGrowthChart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 220);
+    gradient.addColorStop(0,   poolColor + '33');
+    gradient.addColorStop(1,   poolColor + '00');
+
+    if (growthChart) growthChart.destroy();
+    growthChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Pool Value',
+            data: poolValues,
+            borderColor: poolColor,
+            backgroundColor: gradient,
+            borderWidth: 2,
+            fill: true,
+            tension: 0.25,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            segment: {
+              borderDash: (segCtx) => (segCtx.p0DataIndex >= lastHistoricalIndex ? [6, 4] : undefined),
+            },
+          },
+          {
+            label: 'Savings Benchmark',
+            data: benchValues,
+            borderColor: benchColor,
+            borderDash: [4, 4],
+            borderWidth: 1.5,
+            fill: false,
+            tension: 0.25,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (tCtx) => `${tCtx.dataset.label}: ${fmt(tCtx.parsed.y)}`,
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
+          y: { ticks: { callback: (v) => '$' + Number(v).toLocaleString('en-US') } },
+        },
+      },
+    });
+  }
+  let expandedLedger = null; // ledger rows for expandedId (from /ledger)
 
   // ── Glassmorphic SVG Pie Chart ─────────────────────────────
+  //
+  // The ring plots CLAIM ON ACCOUNT EQUITY, not capital contributed:
+  // each investor's slice is their compounded balance plus any cash return
+  // accrued but unpaid, and the remainder of the account is mine. Slice
+  // values and shares come from GET /fund-pool/equity-composition — the
+  // frontend never recomputes them.
+  //
+  // The owner slice is always index 0 of composition.slices, so its position
+  // and colour never shift as investors are added or removed, and it is
+  // painted in the app accent rather than a rotation colour.
 
+  // Neither the accent (#39ff14 in the default theme, reserved for the owner)
+  // nor a yellow (reserved for the deficit wedge) appears early in this
+  // rotation — an investor sharing a hue with either would read as if they
+  // were that slice.
   const PIE_COLORS = [
-    { h: '#39ff14', r: 57,  g: 255, b: 20  },
     { h: '#00cfff', r: 0,   g: 207, b: 255 },
     { h: '#c77dff', r: 199, g: 125, b: 255 },
-    { h: '#ffd166', r: 255, g: 209, b: 102 },
     { h: '#ff6b35', r: 255, g: 107, b: 53  },
     { h: '#06d6a0', r: 6,   g: 214, b: 160 },
     { h: '#ff85a1', r: 255, g: 133, b: 161 },
     { h: '#ef233c', r: 239, g: 35,  b: 60  },
     { h: '#f4a261', r: 244, g: 162, b: 97  },
     { h: '#457b9d', r: 69,  g: 123, b: 157 },
+    { h: '#39ff14', r: 57,  g: 255, b: 20  },
   ];
+
+  // Theme tokens resolve to different hexes per theme, so read them at
+  // render time rather than hard-coding. The accent is reserved for the
+  // owner slice and deliberately absent from PIE_COLORS above — in the
+  // default theme they would both be #39ff14.
+  function _themeColor(varName, fallback) {
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue(varName).trim();
+    return _hexToRgb(raw || fallback);
+  }
+
+  function _hexToRgb(hex) {
+    let h = hex.replace('#', '');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16);
+    return { h: '#' + h, r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  // Colour for slice i of the composition. The owner keeps the accent; the
+  // deficit takes the warning colour; investors rotate independently of both
+  // so their colours don't shift when the owner slice appears or vanishes.
+  function _sliceColor(slice, investorIndex) {
+    if (slice.is_owner) return _themeColor('--accent-primary', '#39ff14');
+    if (slice.label === 'Deficit') return _themeColor('--yellow', '#ffd700');
+    return PIE_COLORS[investorIndex % PIE_COLORS.length];
+  }
 
   // SVG layout constants
   const PIE_CX = 150, PIE_CY = 150, PIE_R = 116, PIE_INNER = 64, PIE_GAP = 1.8;
@@ -2680,20 +2971,39 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
   }
   function _hideTip() { if (_pieTip) _pieTip.style.display = 'none'; }
 
+  // Walk the slices assigning each one its colour, so the ring, the legend
+  // and the tooltips can never disagree about which colour means what.
+  function _decoratedSlices() {
+    let investorIndex = 0;
+    return (composition && composition.slices ? composition.slices : []).map(s => {
+      const isDeficit = !s.is_owner && s.label === 'Deficit';
+      const col = _sliceColor(s, investorIndex);
+      if (!s.is_owner && !isDeficit) investorIndex += 1;
+      return { ...s, col, isDeficit };
+    });
+  }
+
   function renderPieSVG() {
     const container = $id('poolPieContainer');
-    const total = contributors.reduce((s, c) => s + c.amount, 0);
-    if (!contributors.length || !total) { container.innerHTML = ''; return; }
+    const slices = _decoratedSlices();
+    const deficit = composition && composition.mode === 'deficit';
+    if (!slices.length) { container.innerHTML = ''; return; }
 
     let defs = `
       <filter id="pieShadow" x="-20%" y="-20%" width="140%" height="140%">
         <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.45)"/>
-      </filter>`;
+      </filter>
+      <pattern id="deficitHatch" width="8" height="8" patternUnits="userSpaceOnUse"
+               patternTransform="rotate(45)">
+        <rect width="8" height="8" fill="rgba(0,0,0,0.35)"/>
+        <line x1="0" y1="0" x2="0" y2="8" stroke-width="4"
+              stroke="${_themeColor('--yellow', '#ffd700').h}" stroke-opacity="0.85"/>
+      </pattern>`;
     let slicesHTML = '';
     let angle = 0;
 
-    contributors.forEach((c, i) => {
-      const frac = c.amount / total;
+    slices.forEach((s, i) => {
+      const frac = s.share;
       const span = frac * 360 - PIE_GAP;
       if (span <= 0) { angle += frac * 360; return; }
 
@@ -2701,13 +3011,15 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
       const end   = start + span;
       const mid   = (start + end) / 2;
       const midRad = (mid - 90) * Math.PI / 180;
-      const tx = (Math.cos(midRad) * 10).toFixed(2);
-      const ty = (Math.sin(midRad) * 10).toFixed(2);
-      const col = PIE_COLORS[i % PIE_COLORS.length];
+      // The deficit wedge sits further out than a hover offset ever goes —
+      // it is not one claim among others, it is the part that isn't there.
+      const push = s.isDeficit ? 16 : 10;
+      const tx = (Math.cos(midRad) * push).toFixed(2);
+      const ty = (Math.sin(midRad) * push).toFixed(2);
+      const col = s.col;
       const d   = _arc(start, end);
       const delay = (i * 0.065).toFixed(3);
 
-      // Per-slice gradients
       defs += `
         <radialGradient id="pg${i}" cx="40%" cy="35%" r="68%" gradientUnits="objectBoundingBox">
           <stop offset="0%"   stop-color="rgba(${col.r},${col.g},${col.b},0.95)"/>
@@ -2718,14 +3030,21 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
           <stop offset="55%" stop-color="rgba(255,255,255,0)"/>
         </linearGradient>`;
 
+      // Deficit renders hatched and permanently offset; owner gets a heavier
+      // stroke so the accent reads as "mine" rather than another investor.
+      const fill = s.isDeficit ? 'url(#deficitHatch)' : `url(#pg${i})`;
+      const strokeW = s.is_owner ? 2.5 : 1.5;
+      const offsetAttr = s.isDeficit ? ` transform="translate(${tx},${ty})"` : '';
+
       slicesHTML += `
-        <g class="pie-group" data-i="${i}"
-           data-tx="${tx}" data-ty="${ty}"
+        <g class="pie-group ${s.isDeficit ? 'pie-group-deficit' : ''}" data-i="${i}"
+           data-tx="${tx}" data-ty="${ty}"${offsetAttr}
            style="animation-delay:${delay}s">
           <path d="${d}"
-            fill="url(#pg${i})"
-            stroke="rgba(${col.r},${col.g},${col.b},0.75)"
-            stroke-width="1.5"
+            fill="${fill}"
+            stroke="rgba(${col.r},${col.g},${col.b},${s.isDeficit ? 1 : 0.75})"
+            stroke-width="${strokeW}"
+            ${s.isDeficit ? 'stroke-dasharray="6 3"' : ''}
             class="pie-slice"/>
           <path d="${d}" fill="url(#sh${i})" class="pie-sheen"/>
         </g>`;
@@ -2733,15 +3052,22 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
       angle += frac * 360;
     });
 
-    const totalFmt = '$' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const equity = composition.account_equity;
+    const centreValue = fmt(equity);
+    const centreClass = deficit ? 'pie-cvalue pie-cvalue-deficit' : 'pie-cvalue';
+    const labelClass  = deficit ? 'pie-clabel pie-clabel-deficit' : 'pie-clabel';
+    const deficitLine = deficit
+      ? `<text x="${PIE_CX}" y="${PIE_CY + 30}" text-anchor="middle" class="pie-cdeficit">${escHtml('-' + fmt(composition.deficit_amount).replace('-', ''))} deficit</text>`
+      : '';
 
     container.innerHTML = `
       <svg viewBox="0 0 300 300" class="pool-pie-svg" xmlns="http://www.w3.org/2000/svg">
         <defs>${defs}</defs>
         <g filter="url(#pieShadow)">${slicesHTML}</g>
         <circle cx="${PIE_CX}" cy="${PIE_CY}" r="${PIE_INNER - 2}" class="pie-center"/>
-        <text x="${PIE_CX}" y="${PIE_CY - 8}" text-anchor="middle" class="pie-clabel">Pool</text>
-        <text x="${PIE_CX}" y="${PIE_CY + 13}" text-anchor="middle" class="pie-cvalue">${escHtml(totalFmt)}</text>
+        <text x="${PIE_CX}" y="${PIE_CY - (deficit ? 14 : 8)}" text-anchor="middle" class="${labelClass}">Account</text>
+        <text x="${PIE_CX}" y="${PIE_CY + (deficit ? 7 : 13)}" text-anchor="middle" class="${centreClass}">${escHtml(centreValue)}</text>
+        ${deficitLine}
       </svg>`;
 
     // Trigger fade-in after browser has painted (avoids opacity-0 stuck state)
@@ -2757,14 +3083,14 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
       const i   = parseInt(g.dataset.i);
       const tx  = g.dataset.tx;   // already in SVG user units
       const ty  = g.dataset.ty;
-      const c   = contributors[i];
-      const col = PIE_COLORS[i % PIE_COLORS.length];
-      const pct = (c.amount / total * 100).toFixed(1);
-      const amt = '$' + c.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const s   = slices[i];
+      const pct = (s.share * 100).toFixed(1);
+      const amt = fmt(s.value);
+      const name = s.is_owner ? 'My Equity' : s.label;
 
       g.addEventListener('mouseenter', () => {
         g.style.transform = `translate(${tx}px,${ty}px)`;
-        _showTip(c.name, amt, pct, col.h);
+        _showTip(name, amt, pct, s.col.h);
       });
       g.addEventListener('mousemove', _moveTip);
       g.addEventListener('mouseleave', () => { g.style.transform = ''; _hideTip(); });
@@ -2772,79 +3098,451 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
   }
 
   function updatePieChart() {
-    const hasData = contributors.length > 0;
-    $id('poolChartWrap').hidden = !hasData;
-    if (!hasData) return;
+    const wrap  = $id('poolChartWrap');
+    const empty = $id('poolChartEmpty');
+    const slices = _decoratedSlices();
+
+    // Without a snapshot there is no denominator, so there is no honest ring
+    // to draw. Show the prompt instead of inventing an account total.
+    const noEquity = !composition || composition.mode === 'unknown';
+    empty.hidden = !(noEquity && contributions.length > 0);
+    wrap.hidden = noEquity || !slices.length;
+    if (wrap.hidden) {
+      $id('poolConcentrationWarning').hidden = true;
+      return;
+    }
 
     renderPieSVG();
 
-    const total = contributors.reduce((s, c) => s + c.amount, 0);
-    $id('poolChartLegend').innerHTML = contributors.map((c, i) => {
-      const pct = total > 0 ? (c.amount / total * 100).toFixed(1) : '0.0';
-      const col = PIE_COLORS[i % PIE_COLORS.length];
-      return `<div class="pool-legend-item">
-        <span class="pool-legend-swatch" style="background:${col.h};box-shadow:0 0 7px ${col.h}88"></span>
-        <span class="pool-legend-name" title="${escHtml(c.name)}">${escHtml(c.name)}</span>
+    const deficit = composition.mode === 'deficit';
+    $id('poolChartLegend').innerHTML = slices.map(s => {
+      const pct = (s.share * 100).toFixed(1);
+      const name = s.is_owner ? 'My Equity' : s.label;
+      const cls = [
+        'pool-legend-item',
+        s.is_owner ? 'pool-legend-owner' : '',
+        s.isDeficit ? 'pool-legend-deficit' : '',
+      ].filter(Boolean).join(' ');
+      return `<div class="${cls}" title="${escHtml(name)} — ${escHtml(fmt(s.value))}">
+        <span class="pool-legend-swatch" style="background:${s.col.h};box-shadow:0 0 7px ${s.col.h}88"></span>
+        <span class="pool-legend-name">${escHtml(name)}</span>
+        <span class="pool-legend-value">${escHtml(fmt(s.value))}</span>
         <span class="pool-legend-pct">${pct}%</span>
       </div>`;
+    }).join('');
+
+    const note = $id('poolDeficitNote');
+    note.hidden = !deficit;
+    if (deficit) note.textContent = 'Liabilities exceed account equity';
+
+    const stale = $id('poolStaleBadge');
+    stale.hidden = !composition.is_stale;
+    if (composition.is_stale) {
+      stale.textContent = `⚠ Equity as of ${composition.snapshot_date} — over ${SNAPSHOT_STALE_DAYS} days old`;
+    }
+
+    // Concentration is about investor claims on the account, so the owner
+    // slice and the deficit wedge are both excluded from the comparison.
+    const investorSlices = slices.filter(s => !s.is_owner && !s.isDeficit);
+    const investorTotal = investorSlices.reduce((sum, s) => sum + s.value, 0);
+    const warningEl = $id('poolConcentrationWarning');
+    const top = investorSlices.length
+      ? investorSlices.reduce((best, s) => (s.value > best.value ? s : best), investorSlices[0])
+      : null;
+    const topPct = top && investorTotal > 0 ? (top.value / investorTotal * 100) : 0;
+    if (top && topPct > CONCENTRATION_WARNING_THRESHOLD_PCT) {
+      warningEl.hidden = false;
+      warningEl.textContent = `⚠ Concentration risk: ${top.label} holds ${topPct.toFixed(1)}% of investor claims.`;
+    } else {
+      warningEl.hidden = true;
+    }
+  }
+
+  // ── Owner equity ───────────────────────────────────────────
+  // account_equity is whatever the last snapshot recorded; the liability is
+  // live, so this tile shows what's mine RIGHT NOW — including returns that
+  // have accrued since the snapshot was taken.
+  function renderOwnerSummary() {
+    const row = $id('poolOwnerSummary');
+    row.hidden = !ownerSummary;
+    const warn = $id('ownerEquityWarning');
+    if (!ownerSummary) { warn.hidden = true; return; }
+
+    const s = ownerSummary;
+
+    $id('ownerAccountEquity').textContent = s.account_equity === null ? '—' : fmt(s.account_equity);
+    // Staleness comes from the backend so the tile and the chart badge can
+    // never disagree about what counts as stale.
+    const dateEl = $id('ownerSnapshotDate');
+    dateEl.textContent = s.snapshot_date
+      ? (s.is_stale ? `⚠ as of ${s.snapshot_date} — over ${SNAPSHOT_STALE_DAYS} days old`
+                    : `as of ${s.snapshot_date}`)
+      : 'no snapshot yet — enter account equity above';
+    dateEl.classList.toggle('pool-card-sub-stale', !!s.is_stale);
+
+    $id('ownerLiability').textContent = fmt(s.total_liability);
+    $id('ownerLiabilitySplit').textContent =
+      `${fmt(s.investor_balance)} balance + ${fmt(s.returns_owed)} owed`;
+
+    // A negative equity is never hidden or clamped — it is the whole point.
+    const negative = s.owner_equity !== null && s.owner_equity < 0;
+    const valueEl = $id('ownerEquity');
+    valueEl.textContent = s.owner_equity === null ? '—' : fmt(s.owner_equity);
+    valueEl.classList.toggle('pool-card-green', !negative);
+    valueEl.classList.toggle('pool-card-negative', negative);
+    $id('ownerEquityCard').classList.toggle('pool-card-danger', negative);
+
+    $id('ownerBreakEven').textContent = s.break_even_account_return === null
+      ? ''
+      : `break-even: account must return ${fmtPct(s.break_even_account_return)} next month`;
+
+    const growthEl = $id('ownerGrowth');
+    growthEl.textContent = s.cumulative_return === null ? '—' : fmtSignedPct(s.cumulative_return);
+    growthEl.classList.toggle('pool-card-green', s.cumulative_return !== null && s.cumulative_return >= 0);
+    growthEl.classList.toggle('pool-card-negative', s.cumulative_return !== null && s.cumulative_return < 0);
+    $id('ownerGrowthSub').textContent = s.period_return === null
+      ? 'time-weighted, chained'
+      : `${fmtSignedPct(s.period_return)} last period · time-weighted`;
+
+    warn.hidden = !negative;
+    if (negative) {
+      warn.textContent =
+        `⚠ Negative owner equity: the account holds ${fmt(s.account_equity)} against ` +
+        `${fmt(s.total_liability)} owed to investors. You are short ` +
+        `${fmt(Math.abs(s.owner_equity))} — every further 5% period widens the gap.`;
+    }
+  }
+
+  function renderSnapshots() {
+    const wrap = $id('poolSnapshotWrap');
+    wrap.hidden = snapshots.length === 0;
+    if (!snapshots.length) return;
+
+    // Newest first reads better as history, even though the chain is computed
+    // oldest-first server-side.
+    $id('poolSnapshotBody').innerHTML = [...snapshots].reverse().map(s => {
+      const negative = s.owner_equity_at < 0;
+      const period = s.period_skipped
+        ? '<span class="pool-status-withdrawn" title="Previous snapshot had no positive equity to measure from">skipped</span>'
+        : s.period_return === null ? '—' : fmtSignedPct(s.period_return);
+      const cumulative = s.cumulative_return === null ? '—' : fmtSignedPct(s.cumulative_return);
+      const noteAttr = s.note ? ` title="${s.note.replace(/"/g, '&quot;')}"` : '';
+      return `<tr${noteAttr}>
+        <td>${s.snapshot_date}</td>
+        <td>${fmt(s.account_equity)}</td>
+        <td>${fmt(s.total_liability_at)}</td>
+        <td class="${negative ? 'pool-card-negative' : ''}">${fmt(s.owner_equity_at)}</td>
+        <td>${period}</td>
+        <td>${cumulative}</td>
+        <td><button class="btn btn-sm pool-action-btn" data-action="delete-snapshot" data-snapshot="${s.id}">Delete</button></td>
+      </tr>`;
     }).join('');
   }
 
   // ── Render ─────────────────────────────────────────────────
   function render() {
-    const tbody    = $id('poolTableBody');
-    const total    = contributors.reduce((s, c) => s + c.amount, 0);
-    const returns  = total * RETURN_RATE;
-    const after    = total + returns;
-
-    // Show/hide sections
-    const hasData = contributors.length > 0;
+    const tbody   = $id('poolTableBody');
+    const hasData = contributions.length > 0;
     $id('poolSummary').hidden    = !hasData;
     $id('poolTableWrap').hidden  = !hasData;
 
-    if (hasData) {
-      $id('poolTotal').textContent   = fmt(total);
-      $id('poolReturns').textContent = fmt(returns);
-      $id('poolAfter').textContent   = fmt(after);
-      $id('poolCount').textContent   = contributors.length;
+    if (summary && hasData) {
+      $id('poolTotal').textContent   = fmt(summary.total_pool);
+      $id('poolReturns').textContent = fmt(summary.returns_owed);
+      $id('poolAfter').textContent   = fmt(summary.investor_balance);
+      $id('poolCount').textContent   = summary.contributors_count;
+      $id('poolPaidOut').textContent = fmt(summary.total_paid_out);
+      reconcileTicker();
     }
 
-    tbody.innerHTML = contributors.map((c, i) => {
-      const ret   = c.amount * RETURN_RATE;
-      const share = total > 0 ? (c.amount / total * 100) : 0;
-      return `
-        <tr>
-          <td class="pool-name-cell">${escHtml(c.name)}</td>
-          <td>${fmt(c.amount)}</td>
-          <td class="pool-return-cell">${fmt(ret)}</td>
-          <td class="pool-share-cell">
-            <div class="pool-bar-wrap">
-              <span>${share.toFixed(1)}%</span>
-              <div class="pool-bar"><div class="pool-bar-fill" style="width:${share}%"></div></div>
-            </div>
+    renderOwnerSummary();
+    renderSnapshots();
+
+    tbody.innerHTML = contributions.map(c => {
+      const isMonthly = c.payout_type === 'monthly';
+      const active    = c.status === 'active';
+      const isOwner   = c.investor_is_owner;
+
+      // Owner rows are capital in/out, not an investment: they never accrue,
+      // so the payout type and every accrual affordance are meaningless on
+      // them. Capital out is recorded as a negative contribution, not a
+      // Withdraw (which would write a payout ledger row).
+      const typeBadge = isOwner
+        ? '<span class="pool-type-badge type-owner">Owner</span>'
+        : `<span class="pool-type-badge ${isMonthly ? 'type-monthly' : 'type-compound'}">${isMonthly ? 'Monthly' : 'Compound'}</span>`;
+
+      const dueOrStatus = isOwner
+        ? `<span class="pool-status-owner">${c.amount < 0 ? 'Capital out' : 'Capital in'}</span>`
+        : !active
+          ? '<span class="pool-status-withdrawn">Withdrawn</span>'
+          : isMonthly
+            ? renderMonthlyStatus(c)
+            : '<span class="pool-status-compounding">Compounding</span>';
+
+      // A compound-default contribution can still owe cash if individual
+      // periods were flipped to 'paid' — show Mark Paid whenever cash is owed
+      let action = '';
+      if (!isOwner && c.unpaid_ledger_id) {
+        action = `<button class="btn btn-sm pool-action-btn" data-action="mark-paid" data-ledger="${c.unpaid_ledger_id}">Mark Paid</button>`;
+      }
+      if (!isOwner && !isMonthly && active) {
+        action += `<button class="btn btn-sm pool-action-btn pool-withdraw-btn" data-action="withdraw" data-id="${c.id}">Withdraw</button>`;
+      }
+
+      const expanded = expandedId === c.id;
+
+      const mainRow = `
+        <tr class="pool-row ${active ? '' : 'pool-row-closed'} ${expanded ? 'pool-row-expanded' : ''}" data-cid="${c.id}" title="Show payment details">
+          <td class="pool-name-cell">
+            <span class="pool-inv-link">
+              <span class="pool-inv-caret ${expanded ? 'pool-inv-caret-open' : ''}">▸</span> ${escHtml(c.investor_name)}
+            </span>
           </td>
-          <td><button class="pool-del-btn" data-idx="${i}" title="Remove">✕</button></td>
+          <td>${fmt(c.amount)}</td>
+          <td>${escHtml(c.date_contributed)}</td>
+          <td>${typeBadge}</td>
+          <td>${c.months_elapsed}</td>
+          <td class="pool-return-cell">${fmt(c.current_owed_or_balance)}</td>
+          <td>${dueOrStatus}</td>
+          <td>${action}</td>
         </tr>`;
+
+      const detailRow = (expanded && expandedLedger) ? renderDetailRow(c, expandedLedger) : '';
+
+      return mainRow + detailRow;
     }).join('');
 
     updatePieChart();
   }
 
-  function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(contributors));
+  // ── Inline detail panel: contribution terms + full payment history ─
+  function renderDetailRow(c, ledgerRows) {
+    const isMonthly = c.payout_type === 'monthly';
+    const editable  = c.status === 'active';
+
+    const rowsHtml = ledgerRows.length ? ledgerRows.map(r => {
+      const isCompound = r.period_action === 'compound';
+
+      const balance = r.running_balance != null
+        ? `${fmt(r.running_balance)} <span class="pool-balance-arrow">→</span> ${fmt(r.post_action_balance != null ? r.post_action_balance : r.running_balance)}`
+        : '—';
+
+      return `
+        <tr data-ledger-row="${r.id}">
+          <td>${escHtml(r.period_start)} – ${escHtml(r.period_end)}</td>
+          <td><input class="input-field pool-edit-input pool-edit-amount" type="number" min="0" step="0.01" value="${r.amount}" /></td>
+          <td>
+            <select class="pool-action-select pool-edit-action">
+              <option value="paid" ${isCompound ? '' : 'selected'}>Paid</option>
+              <option value="compound" ${isCompound ? 'selected' : ''}>Compound</option>
+            </select>
+          </td>
+          <td>
+            <select class="pool-action-select pool-edit-status">
+              <option value="unpaid" ${r.paid ? '' : 'selected'}>Owed</option>
+              <option value="paid" ${r.paid ? 'selected' : ''}>Paid</option>
+            </select>
+          </td>
+          <td><input class="input-field pool-edit-input pool-edit-date" type="date" value="${r.paid_date ? escHtml(r.paid_date.slice(0, 10)) : ''}" /></td>
+          <td>
+            <select class="pool-action-select pool-edit-method">
+              <option value="">—</option>
+              ${Object.entries(METHOD_LABELS).map(([val, label]) =>
+                `<option value="${val}" ${r.payment_method === val ? 'selected' : ''}>${label}</option>`
+              ).join('')}
+            </select>
+          </td>
+          <td class="pool-balance-cell">${balance}</td>
+          <td><button class="btn btn-sm pool-action-btn" data-ledger-save="${r.id}">Save</button></td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="8" class="pool-ledger-empty-cell">No ledger entries yet.</td></tr>';
+
+    return `
+      <tr class="pool-detail-row" data-detail-for="${c.id}">
+        <td colspan="8">
+          <div class="pool-detail-panel">
+            <div class="pool-detail-head">
+              <span class="pool-detail-inv">${escHtml(c.investor_name)}</span>
+              <span class="pool-type-badge ${isMonthly ? 'type-monthly' : 'type-compound'}">${isMonthly ? 'Monthly default' : 'Compound default'}</span>
+              <span class="${c.status === 'active' ? 'pool-status-compounding' : 'pool-status-withdrawn'}">${c.status === 'active' ? 'Active' : 'Withdrawn'}</span>
+              <button type="button" class="pool-inv-edit-link" data-inv-edit="${c.investor_id}">Edit contact</button>
+            </div>
+
+            ${editable ? `
+            <div class="pool-detail-terms">
+              <label>Principal ($)
+                <input class="input-field" type="number" min="0" step="any" id="detAmount-${c.id}" value="${c.amount}" />
+              </label>
+              <label>Date Contributed
+                <input class="input-field" type="date" id="detDate-${c.id}" value="${c.date_contributed}" />
+              </label>
+              <label>Default Payout
+                <select class="input-field" id="detType-${c.id}">
+                  <option value="monthly" ${isMonthly ? 'selected' : ''}>Monthly (pay out)</option>
+                  <option value="compound" ${!isMonthly ? 'selected' : ''}>Compound (let it ride)</option>
+                </select>
+              </label>
+              <button type="button" class="btn btn-primary btn-sm" data-save-terms="${c.id}">Save</button>
+            </div>
+            <div class="form-error pool-detail-error" data-detail-error="${c.id}" hidden></div>` : ''}
+
+            <table class="pool-table pool-ledger-inline">
+              <thead>
+                <tr>
+                  <th>Period</th><th>Return</th><th>Action</th><th>Status</th>
+                  <th>Paid Date</th><th>Method</th><th>Balance (before → after)</th><th></th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </td>
+      </tr>`;
   }
 
-  // ── Add contributor ────────────────────────────────────────
-  $id('poolAddBtn').addEventListener('click', () => {
+  // Fetch the ledger for a contribution and (re)render its detail panel open
+  async function loadDetail(cid) {
+    try {
+      const detail = await apiFetch(`/fund-pool/contributions/${cid}/ledger`);
+      expandedId     = cid;
+      expandedLedger = detail.ledger;
+    } catch (err) {
+      showError(err.message);
+    }
+    render();
+  }
+
+  function toggleDetail(c) {
+    if (expandedId === c.id) {
+      expandedId = null;
+      expandedLedger = null;
+      render();
+    } else {
+      loadDetail(c.id);
+    }
+  }
+
+  async function saveContributionTerms(cid) {
+    const c = contributions.find(x => x.id === cid);
+    const errEl = document.querySelector(`[data-detail-error="${cid}"]`);
+    if (!c || !errEl) return;
+
+    const amount = parseFloat($id(`detAmount-${cid}`).value);
+    const dateIn = $id(`detDate-${cid}`).value;
+    const type   = $id(`detType-${cid}`).value;
+    if (!amount || amount <= 0 || !dateIn) {
+      errEl.textContent = 'Enter a valid amount and date.';
+      errEl.hidden = false;
+      return;
+    }
+
+    const payload = {};
+    if (amount !== c.amount)           payload.amount = amount;
+    if (dateIn !== c.date_contributed) payload.date_contributed = dateIn;
+    if (type !== c.payout_type)        payload.payout_type = type;
+    if (!Object.keys(payload).length) return;
+
+    // Only amount/date changes regenerate the unpaid ledger — that's the
+    // destructive part worth confirming; a payout-type-only change just
+    // sets the default for future periods.
+    const needsRecompute = 'amount' in payload || 'date_contributed' in payload;
+    if (needsRecompute && !confirm('This will recalculate unpaid returns going forward. Continue?')) return;
+
+    errEl.hidden = true;
+    try {
+      await apiFetch(`/fund-pool/contributions/${cid}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      showToast('Contribution updated.', 'success');
+      await load();
+      await loadDetail(cid);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.hidden = false;
+    }
+  }
+
+  function showError(msg) {
+    const el = $id('poolError');
+    el.hidden = !msg;
+    el.textContent = msg || '';
+  }
+
+  // ── Load everything from the backend ───────────────────────
+  async function load() {
+    if (!getToken()) return;
+    try {
+      const [s, list, growth, owner, snaps, comp] = await Promise.all([
+        apiFetch('/fund-pool/summary'),
+        apiFetch('/fund-pool/contributions'),
+        apiFetch('/fund-pool/growth'),
+        apiFetch('/fund-pool/owner-summary'),
+        apiFetch('/fund-pool/equity-snapshots'),
+        apiFetch('/fund-pool/equity-composition'),
+      ]);
+      summary       = s;
+      contributions = list;
+      growthData    = growth;
+      ownerSummary  = owner;
+      snapshots     = snaps;
+      composition   = comp;
+
+      showError(null);
+      poolSection().hidden = false;
+      render();
+      renderGrowthChart();
+    } catch (err) {
+      if (err.status === 403) { lockPool(); return; }   // not the pool owner: no pool UI, no pool data
+      showError(err.message);
+    }
+  }
+
+  // The backend is what enforces access (403 for everyone but the owner); this
+  // only keeps the pool UI out of sight and drops anything already held in memory.
+  function poolSection() { return document.querySelector('.pool-section'); }
+  function lockPool() {
+    summary = null; contributions = []; growthData = null; ownerSummary = null; snapshots = []; composition = null;
+    const sec = poolSection();
+    sec.hidden = true;
+    sec.querySelectorAll('tbody').forEach(t => { t.innerHTML = ''; });
+    sec.querySelectorAll('[id^="pool"]').forEach(el => { if (!el.matches('input,select,button,textarea')) el.textContent = ''; });
+    showError(null);
+  }
+  // refreshAll() calls this after login / on refresh
+  window.refreshPool = load;
+
+  // ── Add contribution (get-or-create investor, then contribution) ──
+  $id('poolAddBtn').addEventListener('click', async () => {
     const name   = $id('poolName').value.trim();
     const amount = parseFloat($id('poolAmt').value);
-    if (!name || !amount || amount <= 0) return;
-    contributors.push({ name, amount });
-    save();
-    render();
-    $id('poolName').value = '';
-    $id('poolAmt').value  = '';
-    $id('poolName').focus();
+    const dateIn = $id('poolDate').value;
+    if (!name || !amount || amount <= 0 || !dateIn) return;
+
+    const btn = $id('poolAddBtn');
+    btn.disabled = true;
+    try {
+      const investor = await apiFetch('/fund-pool/investors', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+      await apiFetch('/fund-pool/contributions', {
+        method: 'POST',
+        body: JSON.stringify({
+          investor_id: investor.id,
+          amount,
+          date_contributed: dateIn,
+          payout_type: payoutType,
+        }),
+      });
+      $id('poolName').value = '';
+      $id('poolAmt').value  = '';
+      $id('poolName').focus();
+      await load();
+    } catch (err) {
+      showError(err.message);
+    }
+    btn.disabled = false;
   });
 
   // Enter key in inputs
@@ -2852,14 +3550,260 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
     el.addEventListener('keydown', e => { if (e.key === 'Enter') $id('poolAddBtn').click(); });
   });
 
-  // ── Delete contributor ─────────────────────────────────────
-  $id('poolTableBody').addEventListener('click', e => {
-    const btn = e.target.closest('.pool-del-btn');
+  // ── Payout type toggle ─────────────────────────────────────
+  $id('poolTypeToggle').addEventListener('click', e => {
+    const btn = e.target.closest('.pool-type-btn');
     if (!btn) return;
-    contributors.splice(parseInt(btn.dataset.idx), 1);
-    save();
-    render();
+    payoutType = btn.dataset.type;
+    $id('poolTypeToggle').querySelectorAll('.pool-type-btn').forEach(b => {
+      const on = b === btn;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', String(on));
+    });
   });
+
+  // Default the date picker to today (local time)
+  $id('poolDate').value = new Date().toLocaleDateString('en-CA');
+  $id('poolEquityDate').value = new Date().toLocaleDateString('en-CA');
+
+  /* ── Modals: payment method / edit investor ─────────────────
+        (contribution terms + payment history now live inline —
+        see renderDetailRow / toggleDetail above) ────────────── */
+
+  const METHOD_LABELS = {
+    bank_transfer: 'Bank Transfer', crypto: 'Crypto', cash: 'Cash', other: 'Other',
+  };
+
+  function openModal(id)  { $id(id).hidden = false; }
+  function closeModal(id) { $id(id).hidden = true; }
+
+  // Close on backdrop click / ✕ / Cancel, for both remaining pool modals
+  [
+    ['poolInvBackdrop', ['poolInvClose', 'poolInvCancel']],
+    ['poolPayBackdrop', ['poolPayClose', 'poolPayCancel']],
+  ].forEach(([backdrop, buttons]) => {
+    $id(backdrop).addEventListener('click', e => { if (e.target === $id(backdrop)) closeModal(backdrop); });
+    buttons.forEach(b => $id(b).addEventListener('click', () => closeModal(backdrop)));
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    ['poolPayBackdrop', 'poolInvBackdrop'].forEach(id => {
+      if (!$id(id).hidden) closeModal(id);
+    });
+  });
+
+  // ── Payment method modal (serves both Mark Paid and Withdraw) ──
+  let payCtx = null; // { mode, ledgerId?, contributionId?, overrideAction? }
+
+  function openPayModal(ctx) {
+    payCtx = ctx;
+    $id('poolPayMethod').value = '';
+    $id('poolPayError').hidden = true;
+    if (ctx.mode === 'withdraw') {
+      const c = contributions.find(x => x.id === ctx.contributionId);
+      const gain = c ? fmt(c.current_owed_or_balance - c.amount) : 'the accrued return';
+      $id('poolPayTitle').textContent = 'Withdraw Contribution';
+      $id('poolPayMsg').textContent   = `This pays out ${gain} on top of the principal and closes the contribution.`;
+      $id('poolPayConfirm').textContent = 'Withdraw';
+    } else {
+      $id('poolPayTitle').textContent = 'Mark as Paid';
+      $id('poolPayMsg').textContent   = ctx.overrideAction
+        ? 'This period is set to compound — paying it out in cash recalculates all future unpaid periods.'
+        : 'Record this return as paid out to the investor.';
+      $id('poolPayConfirm').textContent = 'Confirm';
+    }
+    openModal('poolPayBackdrop');
+  }
+
+  $id('poolPayConfirm').addEventListener('click', async () => {
+    const method = $id('poolPayMethod').value;
+    if (!method) {
+      $id('poolPayError').textContent = 'Please select a payment method.';
+      $id('poolPayError').hidden = false;
+      return;
+    }
+    const btn = $id('poolPayConfirm');
+    btn.disabled = true;
+    try {
+      const payload = { payment_method: method };
+      if (payCtx.overrideAction) payload.period_action = 'paid';
+      const body = JSON.stringify(payload);
+      if (payCtx.mode === 'withdraw') {
+        await apiFetch(`/fund-pool/contributions/${payCtx.contributionId}/withdraw`, { method: 'POST', body });
+      } else {
+        await apiFetch(`/fund-pool/ledger/${payCtx.ledgerId}/mark-paid`, { method: 'PATCH', body });
+      }
+      closeModal('poolPayBackdrop');
+      showToast(payCtx.mode === 'withdraw' ? 'Contribution withdrawn.' : 'Payment recorded.', 'success');
+      await load();
+      if (expandedId) await loadDetail(expandedId);
+    } catch (err) {
+      $id('poolPayError').textContent = err.message;
+      $id('poolPayError').hidden = false;
+    }
+    btn.disabled = false;
+  });
+
+  // ── Edit investor modal ─────────────────────────────────────
+  // (contribution terms are edited inline — see saveContributionTerms)
+  let invId = null;
+
+  function openInvModal(c) {
+    invId = c.investor_id;
+    $id('piName').value    = c.investor_name;
+    $id('piContact').value = c.investor_contact || '';
+    $id('poolInvError').hidden = true;
+    openModal('poolInvBackdrop');
+  }
+
+  $id('poolInvForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = $id('piName').value.trim();
+    if (!name) {
+      $id('poolInvError').textContent = 'Name is required.';
+      $id('poolInvError').hidden = false;
+      return;
+    }
+    const btn = $id('poolInvSave');
+    btn.disabled = true;
+    try {
+      await apiFetch(`/fund-pool/investors/${invId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name, contact: $id('piContact').value.trim() || null }),
+      });
+      closeModal('poolInvBackdrop');
+      showToast('Investor updated.', 'success');
+      await load();
+    } catch (err) {
+      $id('poolInvError').textContent = err.message;
+      $id('poolInvError').hidden = false;
+    }
+    btn.disabled = false;
+  });
+
+  // ── Table interactions: quick actions, investor toggle, inline panel ──
+  // ── Equity snapshot: record the account value, freeze the liability ──
+  $id('poolSnapshotBtn').addEventListener('click', async () => {
+    const raw  = $id('poolEquityAmt').value;
+    const date = $id('poolEquityDate').value;
+    const note = $id('poolEquityNote').value.trim();
+    const equity = parseFloat(raw);
+    if (raw === '' || Number.isNaN(equity) || !date) {
+      showError('Enter an account equity value and a snapshot date.');
+      return;
+    }
+
+    const btn = $id('poolSnapshotBtn');
+    btn.disabled = true;
+    try {
+      await apiFetch('/fund-pool/equity-snapshots', {
+        method: 'POST',
+        body: JSON.stringify({
+          snapshot_date: date,
+          account_equity: equity,
+          note: note || null,
+        }),
+      });
+      $id('poolEquityAmt').value  = '';
+      $id('poolEquityNote').value = '';
+      showError(null);
+      await load();
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $id('poolSnapshotBody').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-action="delete-snapshot"]');
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      await apiFetch(`/fund-pool/equity-snapshots/${btn.dataset.snapshot}`, { method: 'DELETE' });
+      showError(null);
+      await load();
+    } catch (err) {
+      showError(err.message);
+      btn.disabled = false;
+    }
+  });
+
+  $id('poolTableBody').addEventListener('click', e => {
+    const actionBtn = e.target.closest('[data-action]');
+    if (actionBtn) {
+      if (actionBtn.dataset.action === 'mark-paid') {
+        openPayModal({ mode: 'mark-paid', ledgerId: parseInt(actionBtn.dataset.ledger) });
+      } else {
+        openPayModal({ mode: 'withdraw', contributionId: parseInt(actionBtn.dataset.id) });
+      }
+      return;
+    }
+
+    // Clicking anywhere on a contribution row (outside the quick-action
+    // buttons handled above) toggles its inline terms + payment-history panel
+    const row = e.target.closest('.pool-row');
+    if (row) {
+      const c = contributions.find(x => x.id === parseInt(row.dataset.cid));
+      if (c) toggleDetail(c);
+      return;
+    }
+
+    // "Edit contact" link inside the panel — name/contact only, separate
+    // from the contribution terms since one investor can have many contributions
+    const invEditBtn = e.target.closest('[data-inv-edit]');
+    if (invEditBtn) {
+      const c = contributions.find(x => x.investor_id === parseInt(invEditBtn.dataset.invEdit));
+      if (c) openInvModal(c);
+      return;
+    }
+
+    const saveBtn = e.target.closest('[data-save-terms]');
+    if (saveBtn) saveContributionTerms(parseInt(saveBtn.dataset.saveTerms));
+
+    // Save an edited ledger row (amount / action / status / paid date / method)
+    const ledgerSaveBtn = e.target.closest('[data-ledger-save]');
+    if (ledgerSaveBtn) saveLedgerRow(parseInt(ledgerSaveBtn.dataset.ledgerSave), ledgerSaveBtn);
+  });
+
+  async function saveLedgerRow(ledgerId, btn) {
+    const tr = btn.closest('tr[data-ledger-row]');
+    const amount = parseFloat(tr.querySelector('.pool-edit-amount').value);
+    const action = tr.querySelector('.pool-edit-action').value;
+    const paid   = tr.querySelector('.pool-edit-status').value === 'paid';
+    const dateVal   = tr.querySelector('.pool-edit-date').value;
+    const method    = tr.querySelector('.pool-edit-method').value;
+
+    if (isNaN(amount) || amount < 0) {
+      showToast('Enter a valid amount.', 'error');
+      return;
+    }
+    if (paid && !method) {
+      showToast('Select a payment method for a paid entry.', 'error');
+      return;
+    }
+    if (!confirm('Save this ledger entry? This may recalculate later periods.')) return;
+
+    btn.disabled = true;
+    try {
+      await apiFetch(`/fund-pool/ledger/${ledgerId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          amount,
+          period_action: action,
+          paid,
+          paid_date: dateVal ? `${dateVal}T00:00:00` : null,
+          payment_method: method || null,
+        }),
+      });
+      showToast('Ledger entry updated.', 'success');
+      await load();
+      if (expandedId) await loadDetail(expandedId);
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false;
+    }
+  }
 
   // ── Toggle section ─────────────────────────────────────────
   $id('poolToggleBtn').addEventListener('click', () => {
@@ -2868,8 +3812,6 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
     body.style.display = hidden ? '' : 'none';
     $id('poolToggleBtn').textContent = hidden ? 'Hide' : 'Show';
   });
-
-  render();
 })();
 
 /* ════════════════════════════════════════════════════════════
@@ -2910,4 +3852,856 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
   window.addEventListener('resize', () => {
     if (window.innerWidth > 768) closeCalc();
   });
+})();
+
+/* ════════════════════════════════════════════════════════════
+   ADVANCE CALCULATOR — multi-strategy entry cascade simulator
+
+   A left-edge drawer holding up to three independently configured entry
+   strategies, all sharing one set of global inputs, compared on one price
+   ladder and one table.
+
+   Four modes per slot — Fibonacci, Custom %, Manual Price, Monte Carlo —
+   differ ONLY in how they produce {price, weight}[] plus a stop price.
+   Everything downstream (Wavg, capital, qty, TP, R:R) runs through the
+   single engine in computeStrategy, so a mode can never quietly grow its
+   own arithmetic.
+
+   Input handling note: number fields are NOT bound to parseFloat on every
+   keystroke. "", "-", "0." and "1e" all parse to NaN mid-typing, and
+   writing that back into a controlled input freezes the field. Instead each
+   input owns its live text, commits to state only when the parse is finite,
+   and restores the last good value on blur. renderSlots() rebuilds inputs;
+   recompute() only ever touches OUTPUT nodes, so typing never re-renders
+   the field under the cursor.
+   ════════════════════════════════════════════════════════════ */
+(function initAdvCalcDrawer() {
+  const $ = (id) => document.getElementById(id);
+  const calc     = $('advCalc');
+  const backdrop = $('advBackdrop');
+  const notch    = $('advNotch');
+  const closeBtn = $('advCloseBtn');
+  if (!calc) return;
+
+  // ── Drawer open/close — mirrors initCalcDrawer for the adv- elements ──
+  function openAdv() {
+    calc.classList.add('calc-open');
+    backdrop?.classList.add('active');
+    notch?.classList.add('hidden');
+    document.body.style.overflow = 'hidden';
+    render();
+  }
+
+  function closeAdv() {
+    calc.classList.remove('calc-open');
+    backdrop?.classList.remove('active');
+    notch?.classList.remove('hidden');
+    document.body.style.overflow = '';
+  }
+
+  notch?.addEventListener('click', openAdv);
+  closeBtn?.addEventListener('click', closeAdv);
+  backdrop?.addEventListener('click', closeAdv);
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && calc.classList.contains('calc-open')) {
+      e.stopPropagation();
+      closeAdv();
+    }
+  });
+
+  // Unlike the Fib panel this one is an overlay at every width, so a resize
+  // to desktop still closes it rather than reflowing into a sidebar.
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) closeAdv();
+  });
+
+  // ── Constants ────────────────────────────────────────────────────────
+  // Fibonacci cascade: each step is a percentage BEYOND the previous entry.
+  const FIB_STEPS = [0.01618, 0.03618, 0.04236];
+  const FIB_WEIGHTS = [5, 10, 20, 65];
+  // Back-weighted defaults for the shorter cascades Custom/Manual/MC allow.
+  const DEFAULT_WEIGHTS = { 2: [25, 75], 3: [10, 25, 65], 4: [5, 10, 20, 65] };
+  const SL_AGGRESSIVE = 2.618;
+  const SL_CONSERVATIVE = 3.618;
+  const MODES = [
+    { key: 'fib',    label: 'Fibonacci' },
+    { key: 'custom', label: 'Custom %' },
+    { key: 'manual', label: 'Manual Price' },
+    { key: 'monte',  label: 'Monte Carlo' },
+  ];
+  const MODE_LABEL = Object.fromEntries(MODES.map(m => [m.key, m.label]));
+
+  function accentColor() {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue('--accent-primary').trim() || '#39ff14';
+  }
+  // Slot A takes the theme accent; B and C are fixed hues that stay legible
+  // against all three themes.
+  const slotColor = (i) => [accentColor(), '#00cfff', '#c77dff'][i] || '#c77dff';
+
+  // ── State ────────────────────────────────────────────────────────────
+  const state = {
+    account: 4400,
+    riskPct: 16,
+    leverage: 6,
+    direction: 'short',
+    e1: 0.09554,
+    slots: [
+      makeSlot('fib', true),
+      makeSlot('custom', false),
+      makeSlot('monte', false),
+    ],
+  };
+
+  function makeSlot(mode, enabled) {
+    return {
+      enabled,
+      mode,
+      fib:    { slMode: 'aggressive' },
+      // x100 lands on 1.6179999999999999 in binary floating point; round so the
+      // field shows 1.618 rather than a wall of noise the moment it opens.
+      custom: { count: 4, steps: FIB_STEPS.map(s => +(s * 100).toFixed(6)), weights: [...FIB_WEIGHTS], slOffset: SL_AGGRESSIVE },
+      manual: { count: 4, prices: [], weights: [...FIB_WEIGHTS], slPrice: null },
+      monte:  { count: 4, stepMin: 1.0, stepMax: 5.0, weightMode: 'fixed', slOffset: SL_AGGRESSIVE, sims: 300 },
+    };
+  }
+
+  // ── Calculation engine (mode-agnostic) ───────────────────────────────
+
+  /** Cascade from E1. Long steps DOWN into the move, short steps UP. */
+  function cascade(e1, direction, stepFractions) {
+    const sign = direction === 'long' ? -1 : 1;
+    const out = [e1];
+    let p = e1;
+    for (const s of stepFractions) { p = p * (1 + sign * s); out.push(p); }
+    return out;
+  }
+
+  /** Stop placed `offsetPct` BEYOND the last entry, on the losing side. */
+  function slFromOffset(lastEntry, direction, offsetPct) {
+    const sign = direction === 'long' ? -1 : 1;
+    return lastEntry * (1 + sign * offsetPct / 100);
+  }
+
+  /**
+   * The one place position maths happens.
+   *
+   * Wavg is the harmonic mean of entry prices weighted by allocation — the
+   * price a single lump-sum entry of the same capital would have paid.
+   *
+   * Note Σ(wᵢ·|pᵢ−SL|/pᵢ) reduces exactly to |SL−Wavg|/Wavg, so capital is
+   * equivalently maxLoss / (leverage × distance-to-stop-from-Wavg). The
+   * per-entry form is kept because it is the one that stays correct if
+   * weights ever stop summing to 100.
+   *
+   * Returns null when any input is non-finite or non-positive — callers
+   * surface that as an inline message rather than letting NaN spread.
+   */
+  function computeStrategy({ entries, slPrice, accountSize, riskPct, leverage, direction }) {
+    if (!Array.isArray(entries) || entries.length < 2) return null;
+    if (!Number.isFinite(slPrice) || slPrice <= 0) return null;
+    if (!Number.isFinite(accountSize) || accountSize <= 0) return null;
+    if (!Number.isFinite(riskPct) || riskPct <= 0) return null;
+    if (!Number.isFinite(leverage) || leverage <= 0) return null;
+    for (const e of entries) {
+      if (!Number.isFinite(e.price) || e.price <= 0) return null;
+      if (!Number.isFinite(e.weight)) return null;
+    }
+
+    const invSum = entries.reduce((s, e) => s + (e.weight / 100) / e.price, 0);
+    if (!Number.isFinite(invSum) || invSum <= 0) return null;
+    const wavg = 1 / invSum;
+
+    const maxLoss = accountSize * riskPct / 100;
+    const lossUnit = entries.reduce(
+      (s, e) => s + (e.weight / 100) * Math.abs(e.price - slPrice) / e.price, 0);
+    if (!Number.isFinite(lossUnit) || lossUnit <= 0) return null;
+
+    const capital = maxLoss / (leverage * lossUnit);
+    const qty = capital * leverage / wavg;
+
+    const e1 = entries[0].price;
+    const candidate = wavg * (direction === 'long' ? 1.05 : 0.95);
+    const tp = direction === 'long'
+      ? ((e1 > wavg && e1 < candidate) ? e1 : candidate)
+      : ((e1 < wavg && e1 > candidate) ? e1 : candidate);
+
+    const rr = (Math.abs(tp - wavg) / wavg * 100) / riskPct;
+    if (![wavg, capital, qty, tp, rr].every(Number.isFinite)) return null;
+    return { wavg, maxLoss, capital, qty, tp, rr, slPrice, entries };
+  }
+
+  // ── Deterministic PRNG ───────────────────────────────────────────────
+  // Monte Carlo re-runs on every keystroke; an unseeded Math.random would
+  // make the histogram jump around while the user is only editing a label's
+  // worth of digits. Seeding from the slot config keeps a given
+  // configuration reproducible and only re-rolls when something changes.
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hashSeed(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  // ── Mode → entries resolution ────────────────────────────────────────
+
+  /** Build {entries, slPrice} for a slot, or {error} if it can't be formed. */
+  function resolveSlot(slot) {
+    const { e1, direction } = state;
+    if (!Number.isFinite(e1) || e1 <= 0) return { error: 'Set a positive E1 price.' };
+
+    if (slot.mode === 'fib') {
+      const prices = cascade(e1, direction, FIB_STEPS);
+      const offset = slot.fib.slMode === 'aggressive' ? SL_AGGRESSIVE : SL_CONSERVATIVE;
+      return {
+        entries: prices.map((price, i) => ({ price, weight: FIB_WEIGHTS[i] })),
+        slPrice: slFromOffset(prices[prices.length - 1], direction, offset),
+      };
+    }
+
+    if (slot.mode === 'custom') {
+      const c = slot.custom;
+      const steps = c.steps.slice(0, c.count - 1).map(v => v / 100);
+      if (steps.some(v => !Number.isFinite(v))) return { error: 'Check your inputs — step %.' };
+      const prices = cascade(e1, direction, steps);
+      const weights = c.weights.slice(0, c.count);
+      if (weights.some(v => !Number.isFinite(v))) return { error: 'Check your inputs — weights.' };
+      if (!Number.isFinite(c.slOffset)) return { error: 'Check your inputs — SL offset.' };
+      return {
+        entries: prices.map((price, i) => ({ price, weight: weights[i] })),
+        slPrice: slFromOffset(prices[prices.length - 1], direction, c.slOffset),
+      };
+    }
+
+    if (slot.mode === 'manual') {
+      const m = slot.manual;
+      const prices = m.prices.slice(0, m.count);
+      if (prices.length < m.count || prices.some(v => !Number.isFinite(v) || v <= 0)) {
+        return { error: 'Check your inputs — every entry needs a price.' };
+      }
+      const weights = m.weights.slice(0, m.count);
+      if (weights.some(v => !Number.isFinite(v))) return { error: 'Check your inputs — weights.' };
+      if (!Number.isFinite(m.slPrice) || m.slPrice <= 0) return { error: 'Check your inputs — SL price.' };
+      return {
+        entries: prices.map((price, i) => ({ price, weight: weights[i] })),
+        slPrice: m.slPrice,
+      };
+    }
+
+    // Monte Carlo — the median run stands in for the slot on the ladder.
+    const mc = runMonteCarlo(slot);
+    if (mc.error) return { error: mc.error };
+    return { entries: mc.median.entries, slPrice: mc.median.slPrice, monte: mc };
+  }
+
+  /** Default cascade prices for a given entry count — Manual's starting point. */
+  function defaultCascadePrices(count) {
+    return cascade(state.e1, state.direction, FIB_STEPS.slice(0, count - 1));
+  }
+
+  // ── Monte Carlo ──────────────────────────────────────────────────────
+  function runMonteCarlo(slot) {
+    const mc = slot.monte;
+    const { e1, direction, account, riskPct, leverage } = state;
+    if (![mc.stepMin, mc.stepMax, mc.slOffset].every(Number.isFinite)) {
+      return { error: 'Check your inputs — step band or SL offset.' };
+    }
+    if (mc.stepMax < mc.stepMin) return { error: 'Step band max is below min.' };
+
+    const sims = Math.max(1, Math.round(mc.sims));
+    const rand = mulberry32(hashSeed(JSON.stringify([
+      mc.count, mc.stepMin, mc.stepMax, mc.weightMode, mc.slOffset, sims,
+      e1, direction, account, riskPct, leverage,
+    ])));
+
+    const runs = [];
+    for (let n = 0; n < sims; n++) {
+      const steps = [];
+      for (let i = 0; i < mc.count - 1; i++) {
+        steps.push((mc.stepMin + rand() * (mc.stepMax - mc.stepMin)) / 100);
+      }
+      let weights;
+      if (mc.weightMode === 'random') {
+        const raw = Array.from({ length: mc.count }, () => rand() + 0.02);
+        const total = raw.reduce((a, b) => a + b, 0);
+        weights = raw.map(v => v / total * 100);   // normalised to 100
+      } else {
+        weights = [...(DEFAULT_WEIGHTS[mc.count] || DEFAULT_WEIGHTS[4])];
+      }
+      const prices = cascade(e1, direction, steps);
+      const slPrice = slFromOffset(prices[prices.length - 1], direction, mc.slOffset);
+      const res = computeStrategy({
+        entries: prices.map((price, i) => ({ price, weight: weights[i] })),
+        slPrice, accountSize: account, riskPct, leverage, direction,
+      });
+      if (res) runs.push(res);
+    }
+
+    if (!runs.length) return { error: 'Check your inputs — no run produced a result.' };
+
+    const sorted = [...runs].sort((a, b) => a.wavg - b.wavg);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const wavgs = runs.map(r => r.wavg);
+    const mean = wavgs.reduce((a, b) => a + b, 0) / wavgs.length;
+    const variance = wavgs.reduce((s, v) => s + (v - mean) ** 2, 0) / wavgs.length;
+    return {
+      runs, median, wavgs,
+      stats: { mean, std: Math.sqrt(variance), min: Math.min(...wavgs), max: Math.max(...wavgs), n: runs.length },
+    };
+  }
+
+  // ── Formatting ───────────────────────────────────────────────────────
+  const price = (v) => Number.isFinite(v) ? v.toPrecision(6).replace(/\.?0+$/, '') : '—';
+  const money = (v) => Number.isFinite(v)
+    ? '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+  const qtyFmt = (v) => Number.isFinite(v)
+    ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—';
+  const num = (v, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
+
+  // ── Robust number-input binding ──────────────────────────────────────
+  /**
+   * Commit only finite parses; leave partial text ("", "-", "0.") alone so
+   * the field never fights the person typing into it. On blur, an
+   * still-unparseable field falls back to the last committed value.
+   */
+  function bindNum(el, get, set, { onCommit = recompute } = {}) {
+    el.value = get() === null || get() === undefined ? '' : String(get());
+    el.addEventListener('input', () => {
+      const v = parseFloat(el.value);
+      if (Number.isFinite(v)) { set(v); onCommit(); }
+    });
+    el.addEventListener('blur', () => {
+      const v = parseFloat(el.value);
+      if (!Number.isFinite(v)) {
+        const last = get();
+        el.value = last === null || last === undefined ? '' : String(last);
+        onCommit();
+      }
+    });
+  }
+
+  // ── Slot rendering ───────────────────────────────────────────────────
+  function renderSlots() {
+    const host = $('advSlots');
+    host.innerHTML = '';
+    state.slots.forEach((slot, idx) => {
+      const card = document.createElement('div');
+      card.className = 'adv-slot' + (slot.enabled ? '' : ' adv-slot-off');
+
+      const head = document.createElement('div');
+      head.className = 'adv-slot-head';
+      head.innerHTML =
+        `<span class="adv-slot-dot" style="background:${slotColor(idx)}"></span>` +
+        `<span class="adv-slot-name">Strategy ${'ABC'[idx]}</span>`;
+      const onBtn = document.createElement('button');
+      onBtn.type = 'button';
+      onBtn.className = 'adv-slot-toggle';
+      onBtn.textContent = slot.enabled ? 'On' : 'Off';
+      onBtn.addEventListener('click', () => {
+        slot.enabled = !slot.enabled;
+        renderSlots(); recompute();
+      });
+      head.appendChild(onBtn);
+      card.appendChild(head);
+
+      // 4-way mode toggle
+      const modeGroup = document.createElement('div');
+      modeGroup.className = 'fib-toggle-group adv-mode-group';
+      MODES.forEach(m => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'fib-toggle' + (slot.mode === m.key ? ' active' : '');
+        b.textContent = m.label;
+        b.addEventListener('click', () => {
+          slot.mode = m.key;
+          if (m.key === 'manual' && !slot.manual.prices.length) resetManual(slot);
+          renderSlots(); recompute();
+        });
+        modeGroup.appendChild(b);
+      });
+      card.appendChild(modeGroup);
+
+      const body = document.createElement('div');
+      body.className = 'adv-slot-fields';
+      card.appendChild(body);
+      renderSlotFields(slot, idx, body);
+
+      const warn = document.createElement('div');
+      warn.className = 'adv-warn';
+      warn.id = `advWarn${idx}`;
+      warn.hidden = true;
+      card.appendChild(warn);
+
+      const out = document.createElement('div');
+      out.id = `advOut${idx}`;
+      card.appendChild(out);
+
+      host.appendChild(card);
+    });
+  }
+
+  function countRow(slot, cfgKey, onChange) {
+    const wrap = document.createElement('div');
+    wrap.className = 'fib-field';
+    wrap.innerHTML = '<label class="fib-label">Entries</label>';
+    const group = document.createElement('div');
+    group.className = 'fib-toggle-group';
+    [2, 3, 4].forEach(n => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'fib-toggle' + (slot[cfgKey].count === n ? ' active' : '');
+      b.textContent = String(n);
+      b.addEventListener('click', () => {
+        slot[cfgKey].count = n;
+        slot[cfgKey].weights = [...(DEFAULT_WEIGHTS[n] || DEFAULT_WEIGHTS[4])];
+        if (onChange) onChange();
+        renderSlots(); recompute();
+      });
+      group.appendChild(b);
+    });
+    wrap.appendChild(group);
+    return wrap;
+  }
+
+  function miniInput(value, onSet, placeholder) {
+    const el = document.createElement('input');
+    el.type = 'number';
+    el.step = 'any';
+    el.className = 'adv-mini-input';
+    if (placeholder) el.placeholder = placeholder;
+    bindNum(el, () => value(), onSet);
+    return el;
+  }
+
+  function labelledPair(a, b) {
+    const head = document.createElement('div');
+    head.className = 'adv-mini-head';
+    head.innerHTML = `<span></span><span class="adv-mini-label">${a}</span><span class="adv-mini-label">${b}</span>`;
+    return head;
+  }
+
+  function resetManual(slot) {
+    const prices = defaultCascadePrices(slot.manual.count);
+    slot.manual.prices = prices.map(p => +p.toPrecision(8));
+    slot.manual.weights = [...(DEFAULT_WEIGHTS[slot.manual.count] || DEFAULT_WEIGHTS[4])];
+    const last = prices[prices.length - 1];
+    slot.manual.slPrice = +slFromOffset(last, state.direction, SL_AGGRESSIVE).toPrecision(8);
+  }
+
+  function renderSlotFields(slot, idx, host) {
+    if (slot.mode === 'fib') {
+      const f = document.createElement('div');
+      f.className = 'fib-field';
+      f.innerHTML = '<label class="fib-label">Stop Loss Mode</label>';
+      const g = document.createElement('div');
+      g.className = 'fib-toggle-group';
+      [['conservative', 'Conservative 3.618%'], ['aggressive', 'Aggressive 2.618%']].forEach(([k, lbl]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'fib-toggle' + (slot.fib.slMode === k ? ' active' : '');
+        b.textContent = lbl;
+        b.addEventListener('click', () => { slot.fib.slMode = k; renderSlots(); recompute(); });
+        g.appendChild(b);
+      });
+      f.appendChild(g);
+      host.appendChild(f);
+      const note = document.createElement('div');
+      note.className = 'adv-mini-label';
+      note.textContent = 'Fixed cascade 1.618 / 3.618 / 4.236% · weights 5/10/20/65';
+      host.appendChild(note);
+      return;
+    }
+
+    if (slot.mode === 'custom') {
+      const c = slot.custom;
+      host.appendChild(countRow(slot, 'custom'));
+      host.appendChild(labelledPair('Step % vs prev', 'Weight %'));
+      for (let i = 0; i < c.count; i++) {
+        const row = document.createElement('div');
+        row.className = 'adv-entry-row';
+        row.innerHTML = `<span class="adv-entry-tag">E${i + 1}</span>`;
+        if (i === 0) {
+          const dash = document.createElement('span');
+          dash.className = 'adv-mini-label';
+          dash.textContent = 'E1 (base)';
+          row.appendChild(dash);
+        } else {
+          row.appendChild(miniInput(
+            () => c.steps[i - 1], v => { c.steps[i - 1] = v; }, 'step %'));
+        }
+        row.appendChild(miniInput(
+          () => c.weights[i], v => { c.weights[i] = v; }, 'weight'));
+        host.appendChild(row);
+      }
+      const sl = document.createElement('div');
+      sl.className = 'adv-inline-row';
+      sl.innerHTML = '<span class="adv-mini-label">SL offset % beyond last</span>';
+      sl.appendChild(miniInput(() => c.slOffset, v => { c.slOffset = v; }));
+      host.appendChild(sl);
+      return;
+    }
+
+    if (slot.mode === 'manual') {
+      const m = slot.manual;
+      host.appendChild(countRow(slot, 'manual', () => resetManual(slot)));
+      host.appendChild(labelledPair('Price', 'Weight %'));
+      for (let i = 0; i < m.count; i++) {
+        const row = document.createElement('div');
+        row.className = 'adv-entry-row';
+        row.innerHTML = `<span class="adv-entry-tag">E${i + 1}</span>`;
+        row.appendChild(miniInput(
+          () => m.prices[i], v => { m.prices[i] = v; }, 'price'));
+        row.appendChild(miniInput(
+          () => m.weights[i], v => { m.weights[i] = v; }, 'weight'));
+        host.appendChild(row);
+      }
+      const sl = document.createElement('div');
+      sl.className = 'adv-inline-row';
+      sl.innerHTML = '<span class="adv-mini-label">SL price</span>';
+      sl.appendChild(miniInput(() => m.slPrice, v => { m.slPrice = v; }));
+      host.appendChild(sl);
+
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'adv-btn-ghost';
+      reset.textContent = 'Reset to cascade';
+      reset.addEventListener('click', () => { resetManual(slot); renderSlots(); recompute(); });
+      host.appendChild(reset);
+      return;
+    }
+
+    // Monte Carlo
+    const mc = slot.monte;
+    host.appendChild(countRow(slot, 'monte'));
+
+    host.appendChild(labelledPair('Step min %', 'Step max %'));
+    const band = document.createElement('div');
+    band.className = 'adv-entry-row';
+    band.innerHTML = '<span class="adv-entry-tag">Band</span>';
+    band.appendChild(miniInput(() => mc.stepMin, v => { mc.stepMin = v; }, 'min %'));
+    band.appendChild(miniInput(() => mc.stepMax, v => { mc.stepMax = v; }, 'max %'));
+    host.appendChild(band);
+
+    const wf = document.createElement('div');
+    wf.className = 'fib-field';
+    wf.innerHTML = '<label class="fib-label">Weights</label>';
+    const wg = document.createElement('div');
+    wg.className = 'fib-toggle-group';
+    [['fixed', 'Fixed'], ['random', 'Random']].forEach(([k, lbl]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'fib-toggle' + (mc.weightMode === k ? ' active' : '');
+      b.textContent = lbl;
+      b.addEventListener('click', () => { mc.weightMode = k; renderSlots(); recompute(); });
+      wg.appendChild(b);
+    });
+    wf.appendChild(wg);
+    host.appendChild(wf);
+
+    const sl = document.createElement('div');
+    sl.className = 'adv-inline-row';
+    sl.innerHTML = '<span class="adv-mini-label">SL offset %</span>';
+    sl.appendChild(miniInput(() => mc.slOffset, v => { mc.slOffset = v; }));
+    host.appendChild(sl);
+
+    const simField = document.createElement('div');
+    simField.className = 'fib-field';
+    simField.innerHTML =
+      `<div class="fib-lev-header"><label class="fib-label">Simulations</label>` +
+      `<span class="fib-lev-val" id="advSims${idx}">${mc.sims}</span></div>`;
+    const simRow = document.createElement('div');
+    simRow.className = 'fib-lev-row';
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.className = 'fib-lev-slider';
+    slider.min = '50'; slider.max = '1000'; slider.step = '50';
+    slider.value = String(mc.sims);
+    slider.addEventListener('input', () => {
+      mc.sims = parseInt(slider.value, 10);
+      const lbl = $(`advSims${idx}`);
+      if (lbl) lbl.textContent = mc.sims;
+      recompute();
+    });
+    simRow.appendChild(slider);
+    simField.appendChild(simRow);
+    host.appendChild(simField);
+
+    const hist = document.createElement('div');
+    hist.className = 'adv-hist-wrap';
+    hist.innerHTML =
+      `<div class="adv-hist-canvas-wrap"><canvas id="advHist${idx}"></canvas></div>` +
+      `<div class="adv-chips" id="advChips${idx}"></div>`;
+    host.appendChild(hist);
+  }
+
+  // ── Histogram ────────────────────────────────────────────────────────
+  const histCharts = {};
+
+  function renderHistogram(idx, mc) {
+    const canvas = $(`advHist${idx}`);
+    const chips = $(`advChips${idx}`);
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    // Guard the binning: a degenerate spread (every run identical, or a
+    // non-finite sneaking through) would otherwise produce Infinity bin
+    // widths and an unrenderable chart.
+    const vals = (mc.wavgs || []).filter(Number.isFinite);
+    if (histCharts[idx]) { histCharts[idx].destroy(); histCharts[idx] = null; }
+    if (chips) chips.innerHTML = '';
+    if (vals.length < 2) return;
+
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const span = max - min;
+    const bins = 18;
+    const width = span > 0 ? span / bins : 1;
+    const counts = new Array(bins).fill(0);
+    for (const v of vals) {
+      const i = span > 0 ? Math.min(bins - 1, Math.floor((v - min) / width)) : 0;
+      counts[i] += 1;
+    }
+    const labels = counts.map((_, i) => (min + width * (i + 0.5)).toPrecision(5));
+
+    const col = slotColor(idx);
+    const grid = getComputedStyle(document.documentElement)
+      .getPropertyValue('--border-subtle').trim() || 'rgba(255,255,255,0.08)';
+    const text = getComputedStyle(document.documentElement)
+      .getPropertyValue('--text-muted').trim() || '#888';
+
+    histCharts[idx] = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: 'Runs', data: counts, backgroundColor: col + 'cc', borderWidth: 0 }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { title: (t) => 'Wavg ≈ ' + t[0].label } },
+        },
+        scales: {
+          x: { ticks: { color: text, maxTicksLimit: 6, font: { size: 9 } }, grid: { display: false } },
+          y: { ticks: { color: text, precision: 0, font: { size: 9 } }, grid: { color: grid } },
+        },
+      },
+    });
+
+    if (chips) {
+      const s = mc.stats;
+      chips.innerHTML = [
+        ['n', s.n], ['mean', price(s.mean)], ['std', s.std.toPrecision(3)],
+        ['min', price(s.min)], ['max', price(s.max)],
+      ].map(([k, v]) => `<span class="adv-chip">${k} <b>${v}</b></span>`).join('');
+    }
+  }
+
+  // ── Price ladder ─────────────────────────────────────────────────────
+  function renderLadder(results) {
+    const host = $('advLadder');
+    const active = results.filter(r => r.res);
+    if (!active.length) {
+      host.innerHTML = '<div class="adv-ladder-empty">Enable a strategy to plot the ladder.</div>';
+      return;
+    }
+
+    // Shared axis across every visible entry, stop and target.
+    const all = [];
+    active.forEach(r => {
+      r.res.entries.forEach(e => all.push(e.price));
+      all.push(r.res.slPrice, r.res.tp, r.res.wavg);
+    });
+    const lo = Math.min(...all), hi = Math.max(...all);
+    const pad = (hi - lo) * 0.08 || (hi * 0.08) || 1;
+    const min = lo - pad, max = hi + pad;
+
+    const W = 760, rowH = 54, padL = 74, padR = 16, padT = 18;
+    const H = padT + active.length * rowH + 26;
+    const x = (p) => padL + ((p - min) / (max - min)) * (W - padL - padR);
+
+    const textMuted = getComputedStyle(document.documentElement)
+      .getPropertyValue('--text-muted').trim() || '#888';
+    const textPrim = getComputedStyle(document.documentElement)
+      .getPropertyValue('--text-primary').trim() || '#fff';
+    const green = getComputedStyle(document.documentElement)
+      .getPropertyValue('--green').trim() || '#39ff14';
+    const red = getComputedStyle(document.documentElement)
+      .getPropertyValue('--red').trim() || '#ff1744';
+    const border = getComputedStyle(document.documentElement)
+      .getPropertyValue('--border-subtle').trim() || 'rgba(255,255,255,0.08)';
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Entry price ladder">`;
+
+    // Axis ticks
+    for (let i = 0; i <= 4; i++) {
+      const p = min + (max - min) * (i / 4);
+      svg += `<line x1="${x(p).toFixed(1)}" y1="${padT - 6}" x2="${x(p).toFixed(1)}" y2="${H - 22}" stroke="${border}" stroke-width="1"/>`;
+      svg += `<text x="${x(p).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="${textMuted}" font-family="monospace">${price(p)}</text>`;
+    }
+
+    active.forEach((r, i) => {
+      const cy = padT + i * rowH + rowH / 2;
+      const col = slotColor(r.idx);
+      svg += `<text x="8" y="${cy + 3}" font-size="10" fill="${textMuted}" font-family="sans-serif">Strategy ${'ABC'[r.idx]}</text>`;
+      svg += `<line x1="${padL}" y1="${cy}" x2="${W - padR}" y2="${cy}" stroke="${border}" stroke-width="1"/>`;
+
+      const marker = (p, colour, dash) =>
+        `<line x1="${x(p).toFixed(1)}" y1="${(cy - 17).toFixed(1)}" x2="${x(p).toFixed(1)}" y2="${(cy + 17).toFixed(1)}" stroke="${colour}" stroke-width="2"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+      svg += marker(r.res.slPrice, red, '3 2');
+      svg += marker(r.res.tp, green, '3 2');
+      svg += marker(r.res.wavg, textPrim, '');
+
+      // Dot radius scales with allocation so the heavy entry reads at a glance.
+      const maxW = Math.max(...r.res.entries.map(e => Math.abs(e.weight))) || 1;
+      r.res.entries.forEach((e, j) => {
+        const rad = 3.5 + 6.5 * Math.sqrt(Math.abs(e.weight) / maxW);
+        svg += `<circle cx="${x(e.price).toFixed(1)}" cy="${cy}" r="${rad.toFixed(2)}" fill="${col}" fill-opacity="0.75" stroke="${col}" stroke-width="1.2"><title>E${j + 1} ${price(e.price)} · ${num(e.weight, 1)}%</title></circle>`;
+      });
+    });
+
+    svg += '</svg>';
+    host.innerHTML = svg;
+  }
+
+  // ── Comparison table ─────────────────────────────────────────────────
+  function renderTable(results) {
+    const body = $('advTableBody');
+    const active = results.filter(r => r.res);
+    if (!active.length) {
+      body.innerHTML = '<tr><td class="adv-td-empty" colspan="8">No active strategy.</td></tr>';
+      return;
+    }
+    body.innerHTML = active.map(r => `<tr>
+      <td class="adv-td-name"><span class="adv-swatch" style="background:${slotColor(r.idx)}"></span>Strategy ${'ABC'[r.idx]}</td>
+      <td>${MODE_LABEL[r.slot.mode]}</td>
+      <td>${price(r.res.wavg)}</td>
+      <td>${money(r.res.capital)}</td>
+      <td>${qtyFmt(r.res.qty)}</td>
+      <td>${price(r.res.slPrice)}</td>
+      <td>${price(r.res.tp)}</td>
+      <td>${num(r.res.rr, 2)}</td>
+    </tr>`).join('');
+  }
+
+  // ── Recompute — outputs only, never input values ─────────────────────
+  function recompute() {
+    const results = state.slots.map((slot, idx) => {
+      const outHost = $(`advOut${idx}`);
+      const warnHost = $(`advWarn${idx}`);
+      if (!slot.enabled) {
+        if (outHost) outHost.innerHTML = '';
+        if (warnHost) warnHost.hidden = true;
+        return { idx, slot, res: null };
+      }
+
+      const resolved = resolveSlot(slot);
+      if (resolved.error) {
+        if (outHost) outHost.innerHTML = `<div class="adv-error">${resolved.error}</div>`;
+        if (warnHost) warnHost.hidden = true;
+        return { idx, slot, res: null };
+      }
+
+      // Weights that miss 100 are a warning, never a block — the engine
+      // still produces a coherent (if under/over-allocated) position.
+      if (warnHost) {
+        const sum = resolved.entries.reduce((s, e) => s + e.weight, 0);
+        const off = Math.abs(sum - 100) > 0.01;
+        warnHost.hidden = !off;
+        if (off) warnHost.textContent = `Weights sum to ${num(sum, 1)}%, not 100%.`;
+      }
+
+      const res = computeStrategy({
+        entries: resolved.entries,
+        slPrice: resolved.slPrice,
+        accountSize: state.account,
+        riskPct: state.riskPct,
+        leverage: state.leverage,
+        direction: state.direction,
+      });
+
+      if (!res) {
+        if (outHost) outHost.innerHTML = '<div class="adv-error">Check your inputs — no valid position.</div>';
+        return { idx, slot, res: null };
+      }
+
+      if (outHost) {
+        outHost.innerHTML = `<div class="adv-out">
+          ${[['Wavg', price(res.wavg)], ['Capital', money(res.capital)],
+             ['Qty', qtyFmt(res.qty)], ['Max loss', money(res.maxLoss)],
+             ['SL', price(res.slPrice)], ['TP', price(res.tp)],
+             ['R:R', num(res.rr, 2)]]
+            .map(([k, v]) => `<div class="adv-out-row"><span class="adv-out-k">${k}</span><span class="adv-out-v">${v}</span></div>`)
+            .join('')}
+        </div>`;
+      }
+
+      if (slot.mode === 'monte' && resolved.monte) renderHistogram(idx, resolved.monte);
+      return { idx, slot, res };
+    });
+
+    renderLadder(results);
+    renderTable(results);
+    return results;
+  }
+
+  function render() { renderSlots(); recompute(); }
+
+  // ── Global input wiring ──────────────────────────────────────────────
+  bindNum($('advAccount'), () => state.account, v => { state.account = v; });
+  bindNum($('advE1'), () => state.e1, v => { state.e1 = v; });
+
+  function wireSlider(sliderId, displayId, minusId, plusId, key, fmt) {
+    const slider = $(sliderId), display = $(displayId);
+    const sync = () => {
+      state[key] = parseFloat(slider.value);
+      display.textContent = fmt(state[key]);
+      recompute();
+    };
+    slider.addEventListener('input', sync);
+    $(minusId).addEventListener('click', () => {
+      slider.value = Math.max(parseFloat(slider.min), parseFloat(slider.value) - parseFloat(slider.step));
+      sync();
+    });
+    $(plusId).addEventListener('click', () => {
+      slider.value = Math.min(parseFloat(slider.max), parseFloat(slider.value) + parseFloat(slider.step));
+      sync();
+    });
+    slider.value = String(state[key]);
+    display.textContent = fmt(state[key]);
+  }
+
+  wireSlider('advRisk', 'advRiskDisplay', 'advRiskMinus', 'advRiskPlus', 'riskPct', v => v.toFixed(1) + '%');
+  wireSlider('advLeverage', 'advLevDisplay', 'advLevMinus', 'advLevPlus', 'leverage', v => v + '×');
+
+  calc.querySelectorAll('[data-dir]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.direction = btn.dataset.dir;
+      calc.querySelectorAll('[data-dir]').forEach(b => b.classList.toggle('active', b === btn));
+      // Manual prices were derived from the old direction's cascade; leaving
+      // them would silently plot a long ladder under a short label.
+      state.slots.forEach(s => { if (s.manual.prices.length) resetManual(s); });
+      render();
+    });
+  });
+
+  // Expose the engine for the verification harness (see the test case in the
+  // Advance Calculator spec) without leaking the whole module.
+  window.__advCalc = { computeStrategy, cascade, slFromOffset, state, recompute,
+                       FIB_STEPS, FIB_WEIGHTS };
+
+  render();
 })();

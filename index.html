@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>IllusTrade</title>
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=17" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -141,6 +141,11 @@
         <input class="input-field" type="date" id="endDate" />
         <button class="btn btn-secondary" id="applyFilter" data-i18n="toolbar.apply">Apply</button>
         <button class="btn btn-ghost" id="clearFilter" data-i18n="toolbar.clear">Clear</button>
+        <div class="quick-range-group">
+          <button class="btn btn-ghost quick-range-btn" data-days="7" data-i18n="filter.past7">Past 7 days</button>
+          <button class="btn btn-ghost quick-range-btn" data-days="30" data-i18n="filter.past30">Past 30 days</button>
+          <button class="btn btn-ghost quick-range-btn" data-days="90" data-i18n="filter.past90">Past 90 days</button>
+        </div>
       </div>
       <div class="action-group">
         <button class="btn btn-secondary" id="importBtn" data-i18n="toolbar.import">↑ Import CSV</button>
@@ -226,6 +231,24 @@
         <div class="metric-sub" id="metricAvgPnlSub">&nbsp;</div>
       </article>
 
+      <article class="metric-card" id="card-avgDaily">
+        <div class="metric-label" data-i18n="metric.avgdaily">Avg Daily</div>
+        <div class="metric-value" id="metricAvgDaily">—</div>
+        <div class="metric-sub" id="metricAvgDailySub">&nbsp;</div>
+      </article>
+
+      <article class="metric-card" id="card-avgWeekly">
+        <div class="metric-label" data-i18n="metric.avgweekly">Avg Weekly</div>
+        <div class="metric-value" id="metricAvgWeekly">—</div>
+        <div class="metric-sub" id="metricAvgWeeklySub">&nbsp;</div>
+      </article>
+
+      <article class="metric-card" id="card-avgMonthly">
+        <div class="metric-label" data-i18n="metric.avgmonthly">Avg Monthly</div>
+        <div class="metric-value" id="metricAvgMonthly">—</div>
+        <div class="metric-sub" id="metricAvgMonthlySub">&nbsp;</div>
+      </article>
+
     </section>
 
     <!-- ── P&L CHART ──────────────────────────────────── -->
@@ -244,7 +267,7 @@
     </section>
 
     <!-- ── POOL FUND DASHBOARD ──────────────────────────── -->
-    <section class="pool-section" aria-label="Fund pool manager">
+    <section class="pool-section" aria-label="Fund pool manager" hidden>
       <div class="section-header">
         <div style="display:flex;align-items:center;gap:10px;">
           <h2 class="section-title">Fund Pool</h2>
@@ -255,12 +278,56 @@
 
       <div id="poolBody">
 
-        <!-- Add contributor -->
+        <!-- Account equity — manual entry only, never derived from the trade log -->
+        <div class="pool-equity-row">
+          <label class="pool-equity-label" for="poolEquityAmt">Account Equity</label>
+          <input class="input-field pool-input pool-input-amt" type="number" id="poolEquityAmt"
+                 placeholder="Total KCEX value ($)" step="any" />
+          <input class="input-field pool-input pool-input-date" type="date" id="poolEquityDate"
+                 title="Snapshot date" />
+          <input class="input-field pool-input" type="text" id="poolEquityNote"
+                 placeholder="Note (optional)" autocomplete="off" maxlength="500" />
+          <button class="btn btn-primary btn-sm" id="poolSnapshotBtn">Save Snapshot</button>
+        </div>
+
+        <!-- Add contribution -->
         <div class="pool-add-row">
           <input class="input-field pool-input" type="text"   id="poolName"   placeholder="Name" autocomplete="off" />
           <input class="input-field pool-input pool-input-amt" type="number" id="poolAmt"    placeholder="Amount ($)" min="0" step="any" />
+          <input class="input-field pool-input pool-input-date" type="date" id="poolDate" title="Date contributed" />
+          <div class="pool-type-toggle" id="poolTypeToggle" role="radiogroup" aria-label="Payout type">
+            <button type="button" class="pool-type-btn active" data-type="monthly" role="radio" aria-checked="true">Monthly</button>
+            <button type="button" class="pool-type-btn" data-type="compound" role="radio" aria-checked="false">Compound</button>
+          </div>
           <button class="btn btn-primary btn-sm" id="poolAddBtn">+ Add</button>
         </div>
+
+        <!-- Owner equity: what is left of the account after the fund's obligations -->
+        <div class="pool-summary pool-summary-owner" id="poolOwnerSummary" hidden>
+          <div class="pool-card">
+            <div class="pool-card-label">Account Equity</div>
+            <div class="pool-card-value" id="ownerAccountEquity">—</div>
+            <div class="pool-card-sub" id="ownerSnapshotDate"></div>
+          </div>
+          <div class="pool-card">
+            <div class="pool-card-label">Investor Liability</div>
+            <div class="pool-card-value pool-card-accent" id="ownerLiability">$0</div>
+            <div class="pool-card-sub" id="ownerLiabilitySplit"></div>
+          </div>
+          <div class="pool-card" id="ownerEquityCard">
+            <div class="pool-card-label">My Equity</div>
+            <div class="pool-card-value pool-card-green" id="ownerEquity">—</div>
+            <div class="pool-card-sub" id="ownerBreakEven"></div>
+          </div>
+          <div class="pool-card">
+            <div class="pool-card-label">My Growth</div>
+            <div class="pool-card-value" id="ownerGrowth">—</div>
+            <div class="pool-card-sub" id="ownerGrowthSub">Time-weighted, chained</div>
+          </div>
+        </div>
+
+        <!-- Negative owner equity is the signal that matters most — never hidden -->
+        <div class="pool-equity-warning" id="ownerEquityWarning" hidden></div>
 
         <!-- Summary cards -->
         <div class="pool-summary" id="poolSummary" hidden>
@@ -273,36 +340,93 @@
             <div class="pool-card-value pool-card-accent" id="poolReturns">$0</div>
           </div>
           <div class="pool-card">
-            <div class="pool-card-label">Total After Returns</div>
+            <div class="pool-card-label">Investor Balance</div>
             <div class="pool-card-value pool-card-green" id="poolAfter">$0</div>
           </div>
           <div class="pool-card">
             <div class="pool-card-label">Contributors</div>
             <div class="pool-card-value" id="poolCount">0</div>
           </div>
+          <div class="pool-card">
+            <div class="pool-card-label">Total Paid Out</div>
+            <div class="pool-card-value pool-card-green" id="poolPaidOut">$0</div>
+          </div>
+        </div>
+
+        <!-- Growth chart: pool value vs a low-yield savings benchmark -->
+        <div class="pool-growth-wrap" id="poolGrowthWrap" hidden>
+          <div class="pool-growth-head">
+            <span class="pool-growth-title">Pool Growth</span>
+            <span class="pool-growth-legend">
+              <span class="pool-growth-dot pool-growth-dot-pool"></span>Pool value
+              <span class="pool-growth-dot pool-growth-dot-bench"></span>Savings benchmark (<span id="poolBenchApy">0.5%</span> APY)
+            </span>
+          </div>
+          <div class="chart-wrapper pool-growth-canvas-wrap">
+            <canvas id="poolGrowthChart" role="img" aria-label="Pool value vs savings benchmark line chart"></canvas>
+          </div>
         </div>
 
         <!-- Glassmorphic pie chart -->
         <div class="pool-chart-wrap" id="poolChartWrap" hidden>
           <div class="pool-pie-container" id="poolPieContainer"></div>
-          <div class="pool-chart-legend" id="poolChartLegend"></div>
+          <div class="pool-chart-side">
+            <div class="pool-chart-badges">
+              <span class="pool-stale-badge" id="poolStaleBadge" hidden></span>
+              <span class="pool-deficit-note" id="poolDeficitNote" hidden></span>
+            </div>
+            <div class="pool-chart-legend" id="poolChartLegend"></div>
+          </div>
         </div>
+        <!-- No snapshot yet: a ring needs a denominator, and inventing one
+             would misreport every share. -->
+        <div class="pool-chart-empty" id="poolChartEmpty" hidden>
+          Enter account equity to see composition
+        </div>
+        <div class="pool-concentration-warning" id="poolConcentrationWarning" hidden></div>
 
-        <!-- Contributors table -->
+        <!-- Contributions table -->
         <div class="pool-table-wrap" id="poolTableWrap" hidden>
           <table class="pool-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Contributed</th>
-                <th>5% Return</th>
-                <th>Pool Share</th>
+                <th>Investor</th>
+                <th>Principal</th>
+                <th>Date In</th>
+                <th>Type</th>
+                <th>Months</th>
+                <th>Owed / Balance</th>
+                <th>Next Due / Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="poolTableBody"></tbody>
           </table>
         </div>
+
+        <!-- Equity snapshot history -->
+        <div class="pool-table-wrap pool-snapshot-wrap" id="poolSnapshotWrap" hidden>
+          <div class="pool-growth-head">
+            <span class="pool-growth-title">Equity Snapshots</span>
+            <span class="pool-growth-legend">Returns are time-weighted — owner deposits and withdrawals are stripped out</span>
+          </div>
+          <table class="pool-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Account Equity</th>
+                <th>Liability</th>
+                <th>My Equity</th>
+                <th>Period</th>
+                <th>Cumulative</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="poolSnapshotBody"></tbody>
+          </table>
+        </div>
+
+        <div class="pool-error" id="poolError" hidden></div>
 
       </div><!-- /#poolBody -->
     </section>
@@ -428,6 +552,15 @@
     </div>
 
     <div class="fib-calc-body">
+
+      <!-- Calculator mode -->
+      <div class="fib-toggle-group lc-mode-group">
+        <button class="fib-toggle active" id="fcModeFibBtn">Fib Cascade</button>
+        <button class="fib-toggle" id="fcModeLadderBtn">Liq Ladder</button>
+      </div>
+
+      <!-- ─────────────── MODE: FIB CASCADE ─────────────── -->
+      <div class="lc-mode" id="fcModeFib">
 
       <!-- Inputs -->
       <div class="fib-field">
@@ -555,7 +688,248 @@
         </div>
       </div>
 
+      </div><!-- /#fcModeFib -->
+
+      <!-- ─────────────── MODE: LIQ LADDER ─────────────── -->
+      <div class="lc-mode" id="fcModeLadder" hidden>
+
+        <div class="lc-intro">
+          E1 at Equilibrium or Discount · margins double · E2 −1.619% · E3+ 1% before liquidation · TP 1% (E2 exits at E1)
+        </div>
+
+        <div class="fib-field">
+          <label class="fib-label" for="lcCapital">Ladder Capital ($)</label>
+          <input class="fib-input" type="number" id="lcCapital" placeholder="1,000" min="0" step="any" />
+        </div>
+
+        <div class="fib-field">
+          <label class="fib-label" for="lcPair">Pair</label>
+          <select class="fib-input fib-select" id="lcPair">
+            <option value="BTC/USDT">BTC/USDT</option>
+            <option value="ETH/USDT">ETH/USDT</option>
+            <option value="XRP/USDT">XRP/USDT</option>
+            <option value="SOL/USDT">SOL/USDT</option>
+            <option value="HBAR/USDT">HBAR/USDT</option>
+            <option value="TAO/USDT">TAO/USDT</option>
+            <option value="BNB/USDT">BNB/USDT</option>
+            <option value="DOGE/USDT">DOGE/USDT</option>
+            <option value="SUI/USDT">SUI/USDT</option>
+            <option value="LINK/USDT">LINK/USDT</option>
+          </select>
+        </div>
+
+        <div class="fib-field">
+          <label class="fib-label">Side</label>
+          <div class="fib-toggle-group">
+            <button class="fib-toggle active" id="lcLong">▲ Long</button>
+            <button class="fib-toggle" id="lcShort">▼ Short</button>
+          </div>
+        </div>
+
+        <div class="fib-field">
+          <label class="fib-label" for="lcE1">E1 Price</label>
+          <input class="fib-input" type="number" id="lcE1" placeholder="Equilibrium or Discount level" min="0" step="any" />
+        </div>
+
+        <div class="fib-field">
+          <div class="fib-lev-header">
+            <label class="fib-label">Leverage</label>
+            <span class="fib-lev-val" id="lcLeverageDisplay">3×</span>
+          </div>
+          <div class="fib-lev-row">
+            <button class="fib-lev-btn" id="lcLevMinus" aria-label="Decrease leverage">−</button>
+            <input class="fib-lev-slider" type="range" id="lcLeverage" min="1" max="20" step="1" value="3" />
+            <button class="fib-lev-btn" id="lcLevPlus" aria-label="Increase leverage">+</button>
+          </div>
+          <div class="fib-toggle-group lc-presets">
+            <button class="fib-toggle lc-preset active" data-lev="3">3× Rec.</button>
+            <button class="fib-toggle lc-preset" data-lev="5">5×</button>
+            <button class="fib-toggle lc-preset" data-lev="7">7×</button>
+          </div>
+        </div>
+
+        <div class="fib-field lc-custom">
+          <label class="lc-check" for="lcCustom"><input type="checkbox" id="lcCustom" /> Use my own entry prices</label>
+          <div class="lc-custom-box" id="lcCustomBox" hidden>
+            <div class="lc-custom-grid" id="lcCustomGrid"></div>
+            <button class="btn-inline lc-reset" id="lcCustomReset" type="button">Reset to model</button>
+          </div>
+        </div>
+
+        <details class="lc-adv">
+          <summary>Advanced parameters</summary>
+          <div class="lc-adv-grid">
+            <label for="lcE1Pct">E1 margin (% of capital)</label><input class="fib-input" type="number" id="lcE1Pct" value="3" min="0.1" step="0.1" />
+            <label for="lcE2Dist">E2 distance (%)</label><input class="fib-input" type="number" id="lcE2Dist" value="1.619" min="0" step="0.001" />
+            <label for="lcLiqBuf">E3+ before liq (%)</label><input class="fib-input" type="number" id="lcLiqBuf" value="1" min="0" step="0.1" />
+            <label for="lcTp">Take profit (%)</label><input class="fib-input" type="number" id="lcTp" value="1" min="0" step="0.1" />
+            <label for="lcSl">SL beyond last entry (%)</label><input class="fib-input" type="number" id="lcSl" value="2.618" min="0" step="0.001" />
+            <label for="lcFee">Fee per side (%)</label><input class="fib-input" type="number" id="lcFee" value="0.06" min="0" step="0.01" />
+            <label for="lcMinOrder">Exchange min order ($)</label><input class="fib-input" type="number" id="lcMinOrder" placeholder="optional" min="0" step="any" />
+          </div>
+          <button class="btn-inline lc-reset" id="lcResetAdv" type="button">Reset to defaults</button>
+        </details>
+
+        <button class="btn btn-primary fib-calc-btn" id="lcCalcBtn">Calculate Ladder</button>
+
+        <div class="fib-warning" id="lcWarning" hidden></div>
+
+        <div class="fib-results" id="lcResults" hidden>
+          <div class="fib-section-title">Entry Ladder</div>
+          <div class="lc-ladder" id="lcLadder"></div>
+
+          <div class="fib-section-title">Risk Summary</div>
+          <div class="fib-grid" id="lcSummary"></div>
+
+          <div class="fib-section-title">Probability Simulation</div>
+          <div class="lc-sim">
+            <div class="lc-sim-controls">
+              <label for="lcSimTf">Candles</label>
+              <select class="fib-input fib-select" id="lcSimTf">
+                <option value="5m">5m (most accurate)</option>
+                <option value="15m">15m</option>
+                <option value="1h">1h (fast, optimistic)</option>
+              </select>
+              <label for="lcSimPeriod">History</label>
+              <select class="fib-input fib-select" id="lcSimPeriod">
+                <option value="all">Since Jan 2025</option>
+                <option value="365">Last 365 days</option>
+                <option value="180">Last 180 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+            </div>
+            <label class="lc-sim-check">
+              <input type="checkbox" id="lcSimSimilar" />
+              <span>Only similar setups: E1 in the same zone of the 30-day range (±10%)</span>
+            </label>
+            <button class="btn btn-primary fib-calc-btn" id="lcSimBtn" type="button">Run Probability Simulation</button>
+            <div class="lc-sim-status" id="lcSimStatus" hidden></div>
+            <div class="fib-grid" id="lcSimOut" hidden></div>
+          </div>
+
+          <div id="lcBacktestWrap" hidden>
+            <div class="fib-section-title">Backtest Reference</div>
+            <div id="lcBacktest"></div>
+          </div>
+        </div>
+
+        <div class="fib-section-title">Paper Trading · live, no real money</div>
+        <div class="lc-sim lc-paper" id="lcPaper">
+          <div class="lc-sim-note">Runs the ladder above on live Bitunix prices from the backend. Every fill, TP, SL and liquidation is simulated on closed 1m candles and saved, even while this page is closed.</div>
+          <div class="lc-sim-controls">
+            <label for="lcPaperEntry">E1 entry</label>
+            <select class="fib-input fib-select" id="lcPaperEntry">
+              <option value="zone">Equilibrium / Discount (5m)</option>
+              <option value="price">At the E1 Price field</option>
+              <option value="market">Market, every cycle</option>
+            </select>
+            <label for="lcPaperCompound">Compound</label>
+            <select class="fib-input fib-select" id="lcPaperCompound">
+              <option value="0">0% (withdraw profits)</option>
+              <option value="50">50% of profits</option>
+              <option value="100">100% of profits</option>
+            </select>
+          </div>
+          <button class="btn btn-primary fib-calc-btn" id="lcPaperStartBtn" type="button">Start Paper Bot</button>
+          <div class="lc-sim-status" id="lcPaperStatus" hidden></div>
+          <div class="lc-paper-bots" id="lcPaperBots"></div>
+        </div>
+
+      </div><!-- /#fcModeLadder -->
+
     </div><!-- /.fib-calc-body -->
+  </aside>
+
+  <!-- Advance Calculator backdrop — active on desktop AND mobile, because this
+       panel is always an overlay (unlike .fib-calc, a desktop sidebar) -->
+  <div class="fib-backdrop adv-backdrop" id="advBackdrop" aria-hidden="true"></div>
+
+  <!-- ═══════════════════════════════════════ ADVANCE CALCULATOR -->
+  <aside class="fib-calc adv-calc" id="advCalc" aria-label="Advance calculator">
+    <div class="fib-calc-header">
+      <span class="fib-calc-icon">⌗</span>
+      <h3 class="fib-calc-title">Advance Calculator</h3>
+      <button class="fib-close-btn adv-close-btn" id="advCloseBtn" aria-label="Close advance calculator">&#x2715;</button>
+    </div>
+
+    <div class="fib-calc-body adv-calc-body">
+
+      <!-- ── Global inputs — shared by every strategy slot ───────── -->
+      <div class="adv-globals">
+        <div class="fib-field">
+          <label class="fib-label" for="advAccount">Account Size ($)</label>
+          <input class="fib-input" type="number" id="advAccount" placeholder="4,400" min="0" step="any" />
+        </div>
+
+        <div class="fib-field">
+          <label class="fib-label" for="advE1">E1 Price</label>
+          <input class="fib-input" type="number" id="advE1" placeholder="0.09554" min="0" step="any" />
+        </div>
+
+        <div class="fib-field">
+          <div class="fib-lev-header">
+            <label class="fib-label">Risk %</label>
+            <span class="fib-lev-val" id="advRiskDisplay">16.0%</span>
+          </div>
+          <div class="fib-lev-row">
+            <button class="fib-lev-btn" id="advRiskMinus" aria-label="Decrease risk">−</button>
+            <input class="fib-lev-slider" type="range" id="advRisk" min="0.5" max="50" step="0.5" value="16" />
+            <button class="fib-lev-btn" id="advRiskPlus" aria-label="Increase risk">+</button>
+          </div>
+        </div>
+
+        <div class="fib-field">
+          <div class="fib-lev-header">
+            <label class="fib-label">Leverage</label>
+            <span class="fib-lev-val" id="advLevDisplay">6×</span>
+          </div>
+          <div class="fib-lev-row">
+            <button class="fib-lev-btn" id="advLevMinus" aria-label="Decrease leverage">−</button>
+            <input class="fib-lev-slider" type="range" id="advLeverage" min="1" max="125" step="1" value="6" />
+            <button class="fib-lev-btn" id="advLevPlus" aria-label="Increase leverage">+</button>
+          </div>
+        </div>
+
+        <div class="fib-field">
+          <label class="fib-label">Direction</label>
+          <div class="fib-toggle-group">
+            <button type="button" class="fib-toggle" data-dir="long">Long</button>
+            <button type="button" class="fib-toggle active" data-dir="short">Short</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Strategy slots — up to 3, built by JS ───────────────── -->
+      <div class="fib-section-title">Strategies</div>
+      <div class="adv-slots" id="advSlots"></div>
+
+      <!-- ── Shared price ladder ─────────────────────────────────── -->
+      <div class="fib-section-title">Price Ladder</div>
+      <div class="adv-ladder-wrap" id="advLadderWrap">
+        <div class="adv-ladder" id="advLadder"></div>
+        <div class="adv-ladder-legend">
+          <span class="adv-lg"><i class="adv-lg-bar adv-lg-wavg"></i>Wavg</span>
+          <span class="adv-lg"><i class="adv-lg-bar adv-lg-tp"></i>TP</span>
+          <span class="adv-lg"><i class="adv-lg-bar adv-lg-sl"></i>SL</span>
+          <span class="adv-lg adv-lg-note">dot size = entry weight</span>
+        </div>
+      </div>
+
+      <!-- ── Comparison table ────────────────────────────────────── -->
+      <div class="fib-section-title">Comparison</div>
+      <div class="adv-table-wrap">
+        <table class="adv-table">
+          <thead>
+            <tr>
+              <th>Strategy</th><th>Mode</th><th>Wavg</th><th>Capital</th>
+              <th>Qty</th><th>SL</th><th>TP</th><th>R:R</th>
+            </tr>
+          </thead>
+          <tbody id="advTableBody"></tbody>
+        </table>
+      </div>
+
+    </div><!-- /.adv-calc-body -->
   </aside>
 
   </main>
@@ -563,6 +937,12 @@
   <!-- Mobile notch — pull tab to open Fib calculator -->
   <button class="fib-notch" id="fibNotch" aria-label="Open Fibonacci calculator">
     <span class="fib-notch-icon">◈</span>
+  </button>
+
+  <!-- Advance Calculator notch — LEFT edge, and unlike the Fib notch this one
+       is a persistent pull-tab visible on desktop as well as mobile. -->
+  <button class="fib-notch adv-notch" id="advNotch" aria-label="Open Advance Calculator">
+    <span class="fib-notch-icon">⌗</span>
   </button>
 
   <!-- ═══════════════════════════════════════════════ ADD TRADE MODAL -->
@@ -697,11 +1077,64 @@
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════ POOL: EDIT INVESTOR MODAL -->
+  <div class="modal-backdrop modal-backdrop--sm" id="poolInvBackdrop" role="dialog" aria-modal="true" aria-labelledby="poolInvTitle" hidden>
+    <div class="modal modal--sm">
+      <div class="modal-header">
+        <h2 class="modal-title" id="poolInvTitle">Edit Investor</h2>
+        <button class="modal-close" id="poolInvClose" aria-label="Close">&times;</button>
+      </div>
+      <form class="modal-form" id="poolInvForm" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="piName">Name <span class="required">*</span></label>
+          <input class="input-field" type="text" id="piName" autocomplete="off" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="piContact">Contact <span class="optional">(optional)</span></label>
+          <input class="input-field" type="text" id="piContact" placeholder="email, phone…" autocomplete="off" />
+        </div>
+        <div class="form-error" id="poolInvError" hidden></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" id="poolInvCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="poolInvSave">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ POOL: PAYMENT METHOD MODAL -->
+  <div class="modal-backdrop modal-backdrop--sm" id="poolPayBackdrop" role="dialog" aria-modal="true" aria-labelledby="poolPayTitle" hidden>
+    <div class="modal modal--sm">
+      <div class="modal-header">
+        <h2 class="modal-title" id="poolPayTitle">Mark as Paid</h2>
+        <button class="modal-close" id="poolPayClose" aria-label="Close">&times;</button>
+      </div>
+      <p class="confirm-message" id="poolPayMsg"></p>
+      <div class="form-group" style="padding:0 20px;">
+        <label class="form-label" for="poolPayMethod">Payment Method <span class="required">*</span></label>
+        <select class="input-field" id="poolPayMethod" required>
+          <option value="">— Select —</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="crypto">Crypto</option>
+          <option value="cash">Cash</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-error" id="poolPayError" hidden></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="poolPayCancel">Cancel</button>
+        <button class="btn btn-primary" id="poolPayConfirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══════════════════════════════════════════════ TOAST NOTIFICATION -->
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="config.js?v=3"></script>
+  <script src="config.js?v=4"></script>
   <script src="translations.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=14"></script>
+  <script src="ladder.js?v=3"></script>
+  <script src="paper.js?v=1"></script>
 </body>
 </html>
