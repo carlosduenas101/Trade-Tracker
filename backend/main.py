@@ -102,6 +102,8 @@ from metrics import get_all_metrics, calculate_period_averages
 import fund_pool
 from market import router as market_router
 import paper  # paper trading tables + engine (imported before init_db so its tables are created)
+import hub  # position hub tables + poller (imported before init_db so its tables are created)
+import hub_ladder  # ladder planner/arm routes + reconcile (tables created with init_db)
 
 # ---------------------------------------------------------------------------
 # Application setup
@@ -128,6 +130,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 # Market data routes — registered before the frontend catch-all route below
 app.include_router(market_router)
 app.include_router(paper.router)
+app.include_router(hub.router)
+app.include_router(hub_ladder.router)
 
 
 @app.on_event("startup")
@@ -140,6 +144,7 @@ def on_startup() -> None:
         init_db()
         logging.info("Database initialised successfully.")
         paper.start_engine()
+        hub.start_engine()
         if pool_owner_id() is None:
             logging.error(
                 "POOL_OWNER_USER_ID is missing or not an integer: the fund pool is "
