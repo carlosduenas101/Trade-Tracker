@@ -37,6 +37,11 @@ from config import DATABASE_URL
 # Supabase/Heroku use postgres:// — SQLAlchemy 2.0 requires postgresql://
 _db_url = DATABASE_URL.replace("postgres://", "postgresql://", 1) if DATABASE_URL.startswith("postgres://") else DATABASE_URL
 
+# SQLAlchemy 2.1 made psycopg (v3) the default for postgresql://; this app ships psycopg2,
+# so name the driver explicitly. That keeps the app working on 2.0.x and 2.1.x alike.
+if _db_url.startswith("postgresql://"):
+    _db_url = "postgresql+psycopg2://" + _db_url[len("postgresql://"):]
+
 if _db_url.startswith("sqlite"):
     _connect_args = {"check_same_thread": False}
     engine = create_engine(_db_url, connect_args=_connect_args)
