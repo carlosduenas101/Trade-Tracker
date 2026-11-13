@@ -10,7 +10,8 @@ Flow (decided with Carlos: "plan, then I confirm")
 3. POST /hub/ladders/arm   places the SL/TP and the remaining limit entries, but
    only if ALL of these hold:
      * HUB_TRADING_ENABLED=1 on the server
-     * HUB_MAX_LADDER_MARGIN is set and the ladder's total margin is within it
+     * the ladder's total margin is within the cap you set in the Hub, and that cap can
+       never exceed HUB_MAX_LADDER_MARGIN (server ceiling, required)
      * the request carries the plan_hash from the plan you just looked at
        (any change in the position or the numbers makes the hash differ)
      * confirm is true
@@ -100,6 +101,16 @@ class HubLadder(Base):
     last_error    = Column(String(300), nullable=True)
     created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
     closed_at     = Column(DateTime, nullable=True)
+
+
+class HubSetting(Base):
+    """Per-user Hub settings edited from the UI. Today: the ladder margin cap."""
+    __tablename__ = "hub_settings"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    user_id           = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    max_ladder_margin = Column(Float, nullable=True)
+    updated_at        = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class HubLadderEntry(Base):
@@ -360,15 +371,33 @@ def _get_position(db: Session, user: User, position_id: int) -> HubPosition:
     return pos
 
 
-def _trading_blockers(total_margin: float) -> list[str]:
+def margin_ceiling() -> Optional[float]:
+    """Hard ceiling from the server environment. The UI cap can never exceed it."""
+    c = _f(os.environ.get("HUB_MAX_LADDER_MARGIN"))
+    return c if c and c > 0 else None
+
+
+def effective_cap(db: Session, user_id: int) -> Optional[float]:
+    """The cap that applies: the user's UI cap, never above the server ceiling. None = nothing may be armed."""
+    ceiling = margin_ceiling()
+    row = db.query(HubSetting).filter_by(user_id=user_id).first()
+    if ceiling is None or row is None or not row.max_ladder_margin or row.max_ladder_margin <= 0:
+        return None
+    return min(row.max_ladder_margin, ceiling)
+
+
+def _trading_blockers(db: Session, user_id: int, total_margin: float) -> list[str]:
     out = []
     if os.environ.get("HUB_TRADING_ENABLED", "") != "1":
         out.append("trading is disabled on the server (HUB_TRADING_ENABLED is not 1)")
-    cap = _f(os.environ.get("HUB_MAX_LADDER_MARGIN"))
-    if cap is None or cap <= 0:
-        out.append("HUB_MAX_LADDER_MARGIN is not set")
-    elif total_margin > cap + 1e-9:
-        out.append(f"ladder margin ${total_margin:,.2f} is above the cap of ${cap:,.2f}")
+    if margin_ceiling() is None:
+        out.append("HUB_MAX_LADDER_MARGIN (the server ceiling) is not set")
+    else:
+        cap = effective_cap(db, user_id)
+        if cap is None:
+            out.append("set your max ladder margin in the Hub first")
+        elif total_margin > cap + 1e-9:
+            out.append(f"ladder margin ${total_margin:,.2f} is above your cap of ${cap:,.2f}")
     return out
 
 
@@ -415,7 +444,7 @@ def build_plan(db: Session, user: User, req: PlanRequest) -> tuple[dict, HubPosi
     total_margin = sum(r["margin"] for r in plan["rows"])
     plan["total_margin"] = total_margin
     if pos.exchange == "bitunix" and pos.source == "api":
-        blockers += _trading_blockers(total_margin)
+        blockers += _trading_blockers(db, user.id, total_margin)
     plan["warnings"], plan["blockers"] = warnings, blockers
     plan["can_arm"] = not blockers
     plan["plan_hash"] = plan_hash(plan, pos.id, pos.qty, {"total_margin": req.total_margin, "tp_pct": req.tp_pct,
@@ -432,6 +461,34 @@ router = APIRouter(prefix="/hub/ladders", tags=["Position Hub ladders"])
 
 def _client_id(ladder_id: int, n: int) -> str:
     return f"GMH{ladder_id}E{n}"
+
+
+class SettingsIn(BaseModel):
+    max_ladder_margin: float = Field(gt=0)
+
+
+@router.get("/settings")
+def get_settings(db: Session = Depends(get_db), user: User = Depends(require_pool_owner)):
+    row = db.query(HubSetting).filter_by(user_id=user.id).first()
+    return {"max_ladder_margin": row.max_ladder_margin if row else None, "ceiling": margin_ceiling(),
+            "effective_cap": effective_cap(db, user.id),
+            "trading_enabled": os.environ.get("HUB_TRADING_ENABLED", "") == "1"}
+
+
+@router.put("/settings")
+def put_settings(body: SettingsIn, db: Session = Depends(get_db), user: User = Depends(require_pool_owner)):
+    ceiling = margin_ceiling()
+    if ceiling is None:
+        raise HTTPException(status_code=409, detail="The server ceiling (HUB_MAX_LADDER_MARGIN) is not set, so no cap can be saved.")
+    if body.max_ladder_margin > ceiling + 1e-9:
+        raise HTTPException(status_code=400, detail=f"The cap cannot exceed the server ceiling of ${ceiling:,.2f}.")
+    row = db.query(HubSetting).filter_by(user_id=user.id).first()
+    if row is None:
+        row = HubSetting(user_id=user.id)
+        db.add(row)
+    row.max_ladder_margin, row.updated_at = body.max_ladder_margin, datetime.utcnow()
+    db.commit()
+    return get_settings(db, user)
 
 
 @router.post("/plan")

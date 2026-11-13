@@ -87,10 +87,19 @@ check("arm blocked when disabled (409)", r.status_code == 409 and fake.calls == 
 
 os.environ["HUB_TRADING_ENABLED"] = "1"
 pl = client.post("/hub/ladders/plan", json=body).json()
-check("no cap set blocks", any("HUB_MAX_LADDER_MARGIN is not set" in b for b in pl["blockers"]))
-os.environ["HUB_MAX_LADDER_MARGIN"] = "100"
+check("no cap set blocks", any("server ceiling" in b for b in pl["blockers"]))
+os.environ["HUB_MAX_LADDER_MARGIN"] = "500"
 pl = client.post("/hub/ladders/plan", json=body).json()
-check("over cap blocks", any("above the cap" in b for b in pl["blockers"]))
+check("ceiling set but no UI cap blocks", any("set your max ladder margin" in b for b in pl["blockers"]))
+check("cap above ceiling rejected", client.put("/hub/ladders/settings", json={"max_ladder_margin": 501}).status_code == 400)
+check("cap must be positive", client.put("/hub/ladders/settings", json={"max_ladder_margin": 0}).status_code == 422)
+s_ = client.put("/hub/ladders/settings", json={"max_ladder_margin": 100}).json()
+check("cap saved", s_["max_ladder_margin"] == 100 and s_["effective_cap"] == 100 and s_["ceiling"] == 500)
+pl = client.post("/hub/ladders/plan", json=body).json()
+check("over cap blocks", any("above your cap" in b for b in pl["blockers"]))
+client.put("/hub/ladders/settings", json={"max_ladder_margin": 300})
+os.environ["HUB_MAX_LADDER_MARGIN"] = "250"
+check("lowered ceiling clamps the UI cap", client.get("/hub/ladders/settings").json()["effective_cap"] == 250)
 os.environ["HUB_MAX_LADDER_MARGIN"] = "500"
 pl = client.post("/hub/ladders/plan", json=body).json()
 check("can_arm when all gates pass", pl["can_arm"] is True, str(pl["blockers"]))
