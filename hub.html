@@ -65,6 +65,11 @@
 
   <h2>Ladder planner</h2>
   <div class="card" id="planner">
+    <div class="row" style="align-items:end;margin-bottom:10px">
+      <label>Max ladder margin $<input id="capIn" type="number" min="1" step="any" style="width:120px"></label>
+      <button id="capSave">Save cap</button>
+      <span class="small mut" id="capInfo"></span>
+    </div>
     <div class="mut small" id="plnHint">Open your E1 on any exchange, then press Plan on its row above. Nothing is sent until you press Arm.</div>
     <div class="row" id="plnForm" style="align-items:end;margin-top:8px" hidden>
       <div id="plnWho"></div>
@@ -168,7 +173,7 @@
   }
 
   async function refresh() {
-    try { render(await api('/hub/positions')); note(''); loadLadders(); }
+    try { render(await api('/hub/positions')); note(''); loadLadders(); loadCap(); }
     catch (e) { if (e.message !== 'Session expired') note(e.message, true); }
   }
 
@@ -234,6 +239,22 @@
       catch (e) { note(e.message, true); arm.disabled = !ok.checked; }
     };
   }
+
+
+  async function loadCap() {
+    try {
+      const s = await api('/hub/ladders/settings');
+      if (document.activeElement !== $('capIn')) $('capIn').value = s.max_ladder_margin ?? '';
+      $('capInfo').innerHTML = (s.ceiling == null ? '<span class="red">Server ceiling not set: no ladder can be armed.</span>'
+        : 'Server ceiling ' + money(s.ceiling) + '. ' + (s.effective_cap == null ? '<span class="amb">Set a cap to enable arming.</span>' : 'Active cap ' + money(s.effective_cap) + '.'))
+        + (s.trading_enabled ? '' : ' <span class="amb">Trading is off on the server.</span>');
+    } catch (e) { /* shown by refresh */ }
+  }
+  $('capSave').onclick = async () => {
+    const v = num($('capIn').value); if (!v || v <= 0) { note('Enter a cap in $.', true); return; }
+    try { await api('/hub/ladders/settings', { method: 'PUT', body: JSON.stringify({ max_ladder_margin: v }) }); note('Cap saved.'); await loadCap(); }
+    catch (e) { note(e.message, true); }
+  };
 
   async function loadLadders() {
     try {
