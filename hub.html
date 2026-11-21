@@ -145,20 +145,27 @@
     } catch (e) { alert(e.message); }
   };
 
+  // P&L as % of margin (ROE), e.g. "+12.3%"
+  function pnlPct(upnl, margin) {
+    if (upnl == null || !margin) return '—';
+    const v = upnl / margin * 100;
+    return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+  }
+
   function render(d) {
     $('devices').innerHTML = d.devices.length ? d.devices.map(v => `
       <div class="card dev"><b>${esc(v.device)}</b><div class="mut small">${v.open} open</div>
-      <div>Margin ${money(v.margin)} · <span class="${cls(v.upnl)}">${money(v.upnl, true)}</span></div></div>`).join('')
+      <div>Margin ${money(v.margin)} · <span class="${cls(v.upnl)}">${money(v.upnl, true)} (${pnlPct(v.upnl, v.margin)})</span></div></div>`).join('')
       : '<div class="mut">No open trades on any device.</div>';
 
     $('rows').innerHTML = d.positions.length ? d.positions.map(p => {
       const entries = p.pending_entries.length ? p.pending_entries.map(e => price(e.price)).join(' → ') : '<span class="mut">none pending</span>';
       const tpsl = (p.tp_price || p.sl_price) ? `${price(p.tp_price)} / ${price(p.sl_price)}` : '<span class="mut">—</span>';
-      const data = (p.stale ? '<span class="tag stale">stale</span> ' : '') + `<span class="tag src">${p.source === 'api' ? 'API' : 'browser'}</span> <span class="mut small">${ago(p.age_seconds)}</span>`;
+      const data = (p.stale ? '<span class="tag stale">stale</span> ' : '') + `<span class="tag src">${p.source === 'api' ? 'API' : p.source === 'manual' ? 'manual' : 'browser'}</span> <span class="mut small">${ago(p.age_seconds)}</span>`;
       return `<tr><td><b>${esc(p.device)}</b></td><td>${esc(p.exchange.toUpperCase())}</td><td>${esc(p.symbol)}</td>
         <td><span class="tag ${esc(p.side)}">${esc(p.side)}</span></td><td class="num">${p.qty}</td>
         <td class="num">${price(p.avg_entry)}</td><td class="num">${p.leverage ? p.leverage + 'x' : '—'}</td>
-        <td class="num">${money(p.margin)}</td><td class="num ${cls(p.unrealized_pnl)}">${money(p.unrealized_pnl, true)}</td>
+        <td class="num">${money(p.margin)}</td><td class="num ${cls(p.unrealized_pnl)}">${money(p.unrealized_pnl, true)}<div class="small">${pnlPct(p.unrealized_pnl, p.margin)}</div></td>
         <td class="num">${price(p.liq_price)}</td><td>${tpsl}</td><td>${entries}</td><td>${data}</td><td><button data-plan="${p.id}" data-sym="${esc(p.symbol)}" data-dev="${esc(p.device)}" data-ex="${esc(p.exchange)}" data-m="${p.margin || ''}">Plan</button></td></tr>`;
     }).join('') : '<tr><td colspan="14" class="mut">No open positions.</td></tr>';
 
