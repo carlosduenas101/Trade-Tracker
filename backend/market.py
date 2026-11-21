@@ -1,11 +1,13 @@
 """
-Market data — historical candles from the Bitunix public futures API.
+Market data from the Bitunix public futures API.
 
-Used by the Liq Ladder probability simulation in the calculator.
-
-Route
------
+Routes
+------
 GET /market/klines?symbol=BTCUSDT&interval=5m&start=2025-01-01
+    Historical candles for the Liq Ladder probability simulation.
+GET /market/pulse?symbols=BTCUSDT,ETHUSDT
+    Live last price, 24 h change and a 24 h sparkline per symbol, for the
+    dashboard ticker tape. See ``pulse`` below.
 
 The first request for a (symbol, interval, start) downloads the full history in a
 background thread (Bitunix returns 200 candles per call) and answers
@@ -232,4 +234,106 @@ def klines(
         "h": [r[2] for r in s],
         "l": [r[3] for r in s],
         "c": [r[4] for r in s],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Pulse — live last price + 24 h change for the dashboard ticker tape
+# ---------------------------------------------------------------------------
+#
+# One request per symbol: the last 97 candles of 15m. The newest candle is the
+# one still forming, so its close is the latest traded price; the open of the
+# candle 24 h earlier is the 24 h reference. Same public kline endpoint as the
+# history download above, so no new exchange dependency.
+
+PULSE_INTERVAL = "15m"
+PULSE_CANDLES = 97            # 96 x 15m = 24 h, plus the candle still forming
+PULSE_TTL = 8                 # seconds a symbol's pulse is reused
+PULSE_FAIL_TTL = 30           # seconds a failed symbol is not retried
+PULSE_MAX_SYMBOLS = 12
+_pulse_cache: dict[str, tuple[float, Optional[dict]]] = {}
+_pulse_lock = threading.Lock()
+
+
+def _pulse_rows(symbol: str) -> list[list[float]]:
+    """Newest PULSE_CANDLES candles, oldest first: [[t_sec, o, h, l, c], ...]."""
+    r = requests.get(BITUNIX_KLINE_URL, timeout=6, params={
+        "symbol": symbol, "interval": PULSE_INTERVAL, "limit": PULSE_CANDLES,
+        "endTime": int(time.time() * 1000),
+    })
+    r.raise_for_status()
+    body = r.json()
+    if body.get("code") != 0:
+        raise RuntimeError(body.get("msg") or f"code {body.get('code')}")
+    rows = [[int(x["time"]) // 1000, float(x["open"]), float(x["high"]), float(x["low"]), float(x["close"])]
+            for x in body.get("data") or []]
+    return sorted(rows, key=lambda x: x[0])
+
+
+def summarize_pulse(symbol: str, rows: list[list[float]]) -> Optional[dict]:
+    """Turn candles (oldest first) into the ticker numbers. None when there is nothing to show."""
+    if not rows:
+        return None
+    window = rows[-PULSE_CANDLES:]
+    last = window[-1][4]
+    ref = window[0][1]
+    return {
+        "symbol": symbol,
+        "price": last,
+        "change_pct": (last - ref) / ref * 100.0 if ref else None,
+        "high": max(r[2] for r in window),
+        "low": min(r[3] for r in window),
+        "spark": [r[4] for r in window],
+        "time": window[-1][0],
+    }
+
+
+def get_pulse(symbol: str, fetch: Callable[[str], list] = _pulse_rows) -> Optional[dict]:
+    """Cached pulse for one symbol. A failure is cached briefly so a dead symbol never
+    slows every poll; None means no data right now."""
+    now = time.time()
+    with _pulse_lock:
+        hit = _pulse_cache.get(symbol)
+        if hit and now - hit[0] < (PULSE_TTL if hit[1] is not None else PULSE_FAIL_TTL):
+            return hit[1]
+    try:
+        out = summarize_pulse(symbol, fetch(symbol))
+    except Exception as exc:
+        log.warning("pulse fetch failed for %s: %s", symbol, exc)
+        out = None
+    with _pulse_lock:
+        _pulse_cache[symbol] = (now, out)
+    return out
+
+
+def parse_symbols(raw: str) -> list[str]:
+    """'btc/usdt, ETHUSDT ,eth-usdt' -> ['BTCUSDT', 'ETHUSDT'] (order kept, duplicates dropped)."""
+    out: list[str] = []
+    for part in raw.split(","):
+        sym = part.strip().upper().replace("/", "").replace("-", "")
+        if not sym:
+            continue
+        if not SYMBOL_RE.match(sym):
+            raise HTTPException(status_code=400, detail=f"Invalid symbol: {part.strip()}")
+        if sym not in out:
+            out.append(sym)
+    if not out:
+        raise HTTPException(status_code=400, detail="No symbols given.")
+    if len(out) > PULSE_MAX_SYMBOLS:
+        raise HTTPException(status_code=400, detail=f"At most {PULSE_MAX_SYMBOLS} symbols.")
+    return out
+
+
+@router.get("/pulse")
+def pulse(
+    symbols: str = Query(..., description="Comma-separated Bitunix futures symbols, e.g. BTCUSDT,ETHUSDT"),
+    current_user=Depends(get_current_user),
+):
+    syms = parse_symbols(symbols)
+    with ThreadPoolExecutor(max_workers=min(WORKERS, len(syms))) as pool:
+        results = list(pool.map(get_pulse, syms))
+    return {
+        "server_time": int(time.time()),
+        "items": [r for r in results if r is not None],
+        "missing": [s for s, r in zip(syms, results) if r is None],
     }

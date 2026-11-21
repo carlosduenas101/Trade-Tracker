@@ -1,6 +1,11 @@
 /* ════════════════════════════════════════════════════════════
    TRADE TRACKER — APP.JS
    Pure vanilla ES2020+, no frameworks.
+
+   Core of the dashboard: auth, period, data loading, metric cards, the main
+   chart, the trade journal and its modals. Client-side analytics (edge panel,
+   calendar, leaderboard, heatmaps, card micro-charts) live in insights.js and
+   the live ticker tape + sessions clock in market.js.
    ════════════════════════════════════════════════════════════ */
 
 'use strict';
@@ -8,6 +13,8 @@
 const API_BASE = (typeof window.BACKEND_URL !== 'undefined' && window.BACKEND_URL)
   ? window.BACKEND_URL.replace(/\/$/, '')
   : 'http://localhost:8000';
+
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ── Auth token helpers ────────────────────────────────────── */
 const _TOKEN_KEY = 'tt_token';
@@ -35,9 +42,10 @@ const _THEME_META = {
 const _THEME_CYCLE = ['dark', 'purple', 'blossom'];
 
 function applyTheme(theme) {
+  if (!_THEME_META[theme]) theme = 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(_THEME_KEY, theme);
-  const { icon, label, logo } = _THEME_META[theme] || _THEME_META.dark;
+  const { icon, label, logo } = _THEME_META[theme];
   ['themeToggle', 'loginThemeToggle'].forEach(id => {
     const btn = document.getElementById(id);
     if (!btn) return;
@@ -48,10 +56,8 @@ function applyTheme(theme) {
     const img = document.getElementById(id);
     if (img) img.src = logo;
   });
-  // Re-render the P&L chart so theme-aware colours apply immediately
-  if (typeof renderChart === 'function' && state?.trades) {
-    renderChart(applyTableFilters ? applyTableFilters(state.trades) : state.trades);
-  }
+  // Charts read their colours from the CSS variables, so they redraw on a theme change
+  document.dispatchEvent(new CustomEvent('illustrade:theme', { detail: theme }));
 }
 
 function toggleTheme() {
@@ -60,14 +66,14 @@ function toggleTheme() {
   applyTheme(_THEME_CYCLE[(idx + 1) % _THEME_CYCLE.length]);
 }
 
-/* ── Language / i18n ───────────────────────────────────────── */
+/* ── Language ──────────────────────────────────────────────── */
 const _LANG_KEY    = 'tt_lang';
 let   _currentLang = 'en';
 
 const _LANG_META = {
-  en: { flag: '🇺🇸', label: 'EN' },
-  es: { flag: '🇪🇸', label: 'ES' },
-  fr: { flag: '🇫🇷', label: 'FR' },
+  en: { flag: '🇺🇸', label: 'EN', locale: 'en-US' },
+  es: { flag: '🇪🇸', label: 'ES', locale: 'es-ES' },
+  fr: { flag: '🇫🇷', label: 'FR', locale: 'fr-FR' },
 };
 
 function t(key) {
@@ -75,75 +81,80 @@ function t(key) {
   return lang[key] ?? TRANSLATIONS.en[key] ?? key;
 }
 
+/** Locale for dates in the UI language (numbers stay en-US: $1,234.56). */
+function uiLocale() { return (_LANG_META[_currentLang] || _LANG_META.en).locale; }
+
 function applyLang(lang) {
+  if (!_LANG_META[lang]) lang = 'en';
   _currentLang = lang;
   localStorage.setItem(_LANG_KEY, lang);
   document.documentElement.lang = lang;
 
-  // Static elements with data-i18n
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const val = t(el.dataset.i18n);
-    if (val !== undefined) el.textContent = val;
-  });
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
 
-  // Placeholder attributes
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
-    const val = t(el.dataset.i18nPh);
-    if (val !== undefined) el.placeholder = val;
-  });
-
-  // Update all dropdown toggle buttons + mark active option
-  const meta = _LANG_META[lang] || _LANG_META.en;
+  const meta = _LANG_META[lang];
   ['langDropdown', 'loginLangDropdown'].forEach(id => {
     const dd = document.getElementById(id);
     if (!dd) return;
-    const flagEl  = dd.querySelector('.lang-flag');
-    const labelEl = dd.querySelector('.lang-label');
-    if (flagEl)  flagEl.textContent  = meta.flag;
-    if (labelEl) labelEl.textContent = meta.label;
+    dd.querySelector('.lang-flag').textContent  = meta.flag;
+    dd.querySelector('.lang-label').textContent = meta.label;
     dd.querySelectorAll('.lang-option').forEach(opt => {
       opt.classList.toggle('active', opt.dataset.lang === lang);
     });
   });
 
-  // Default date filter label
-  const tfDateLabel = document.getElementById('tfDateLabel');
-  if (tfDateLabel) tfDateLabel.textContent = t('filter.last30');
-
-  // Symbol filter label
-  const tfSymbolLabel = document.getElementById('tfSymbolLabel');
-  if (tfSymbolLabel) tfSymbolLabel.textContent = t('filter.allsymbols');
+  // Labels that depend on state, not just on the language
+  updatePeriodUI();
+  updateSymbolLabel();
+  document.dispatchEvent(new CustomEvent('illustrade:lang', { detail: lang }));
 }
 
 function initLangDropdowns() {
   document.querySelectorAll('.lang-dropdown').forEach(dd => {
-    const btn = dd.querySelector('.lang-toggle');
-
-    // Toggle open/close on button click
-    btn?.addEventListener('click', (e) => {
+    dd.querySelector('.lang-toggle')?.addEventListener('click', (e) => {
       e.stopPropagation();
       const isOpen = dd.classList.contains('open');
-      // Close every dropdown first
       document.querySelectorAll('.lang-dropdown.open').forEach(d => d.classList.remove('open'));
       if (!isOpen) dd.classList.add('open');
     });
-
-    // Select language on option click
     dd.querySelectorAll('.lang-option').forEach(opt => {
       opt.addEventListener('click', () => {
         applyLang(opt.dataset.lang);
         dd.classList.remove('open');
+        // Re-render text built in JS (cards, table, chart labels)
+        if (state.loaded) renderAll();
       });
     });
   });
-
-  // Close all dropdowns when clicking outside
   document.addEventListener('click', () => {
     document.querySelectorAll('.lang-dropdown.open').forEach(d => d.classList.remove('open'));
   });
 }
 
-/* ── Background canvas animation ───────────────────────────── */
+/* ── Animation loop helper: pauses while the tab is hidden ─── */
+function makeLoop(frame) {
+  let raf = 0;
+  let running = false;
+  const tick = () => { frame(); raf = requestAnimationFrame(tick); };
+  const loop = {
+    start() {
+      if (running) return;
+      running = true;
+      if (REDUCED_MOTION) { frame(); return; }   // one still frame, no motion
+      if (!document.hidden) tick();
+    },
+    stop() { running = false; cancelAnimationFrame(raf); raf = 0; },
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (!running || REDUCED_MOTION) return;
+    if (document.hidden) { cancelAnimationFrame(raf); raf = 0; }
+    else if (!raf) tick();
+  });
+  return loop;
+}
+
+/* ── Background canvas: drifting candles ───────────────────── */
 function initBgCanvas() {
   const canvas = document.getElementById('bgCanvas');
   if (!canvas) return;
@@ -160,9 +171,9 @@ function initBgCanvas() {
   resize();
 
   function themeColors() {
-    const t = document.documentElement.getAttribute('data-theme');
-    if (t === 'blossom') return { up: '#9b5de5', down: '#ff85a1' };
-    if (t === 'purple')  return { up: '#00e5ff', down: '#c030ff' };
+    const th = document.documentElement.getAttribute('data-theme');
+    if (th === 'blossom') return { up: '#9b5de5', down: '#ff85a1' };
+    if (th === 'purple')  return { up: '#00e5ff', down: '#c030ff' };
     return { up: '#39ff14', down: '#ff1744' };
   }
 
@@ -176,7 +187,7 @@ function initBgCanvas() {
   }
 
   function makeRow(cy, hFrac, speed) {
-    const range = canvas.height * hFrac * 0.5; // px for ±42 price units
+    const range = canvas.height * hFrac * 0.5;
     const data  = [];
     let price   = 85 + Math.random() * 30;
     const need  = Math.ceil((canvas.width + PITCH * 8) / PITCH);
@@ -199,97 +210,85 @@ function initBgCanvas() {
   function drawCandle(x, c, cy, range, col) {
     const scale = range / 42;
     const color = c.close >= c.open ? col.up : col.down;
-    const mid   = cy;
-
     ctx.strokeStyle = color;
     ctx.lineWidth   = 1;
     ctx.beginPath();
-    ctx.moveTo(x + CW / 2, mid - (c.high - 100) * scale);
-    ctx.lineTo(x + CW / 2, mid - (c.low  - 100) * scale);
+    ctx.moveTo(x + CW / 2, cy - (c.high - 100) * scale);
+    ctx.lineTo(x + CW / 2, cy - (c.low  - 100) * scale);
     ctx.stroke();
-
-    const bTop = mid - (Math.max(c.open, c.close) - 100) * scale;
+    const bTop = cy - (Math.max(c.open, c.close) - 100) * scale;
     const bH   = Math.max(Math.abs(c.close - c.open) * scale, 1.5);
     ctx.fillStyle = color;
     ctx.fillRect(x, bTop, CW, bH);
   }
 
   function drawTrend(row, col) {
-    const { data, cy, range, offset } = row;
-    const scale = range / 42;
+    const scale = row.range / 42;
     ctx.strokeStyle = col.up;
     ctx.lineWidth   = 1.2;
     ctx.setLineDash([5, 8]);
     ctx.beginPath();
     let first = true;
-    data.forEach((c, i) => {
-      const x = i * PITCH - offset + CW / 2;
+    row.data.forEach((c, i) => {
+      const x = i * PITCH - row.offset + CW / 2;
       if (x < -PITCH || x > canvas.width + PITCH) return;
-      const y = cy - (c.close - 100) * scale;
-      first ? (ctx.moveTo(x, y), first = false) : ctx.lineTo(x, y);
+      const y = row.cy - (c.close - 100) * scale;
+      if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
     });
     ctx.stroke();
     ctx.setLineDash([]);
   }
 
-  let rafId;
   function frame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const col = themeColors();
-
     rows.forEach(row => {
       row.offset += row.speed;
-
-      // Drop candles scrolled off the left
       while (row.data.length && (PITCH - row.offset) < -PITCH * 2) {
         row.data.shift();
         row.offset -= PITCH;
       }
-      // Fill candles on the right
       while (row.data.length * PITCH - row.offset < canvas.width + PITCH * 6) {
         const last = row.data.length ? row.data[row.data.length - 1].close : 100;
         row.data.push(newCandle(last));
       }
-
-      ctx.globalAlpha = 0.18;
+      ctx.globalAlpha = 0.13;
       row.data.forEach((c, i) => {
         const x = i * PITCH - row.offset;
         if (x < -PITCH * 2 || x > canvas.width + PITCH) return;
         drawCandle(x, c, row.cy, row.range, col);
       });
-
-      ctx.globalAlpha = 0.09;
+      ctx.globalAlpha = 0.07;
       drawTrend(row, col);
     });
-
     ctx.globalAlpha = 1;
-    rafId = requestAnimationFrame(frame);
   }
-  frame();
 
-  window.addEventListener('resize', () => { resize(); buildRows(); });
+  const loop = makeLoop(frame);
+  loop.start();
+  window.addEventListener('resize', () => { resize(); buildRows(); if (REDUCED_MOTION) frame(); });
+  document.addEventListener('illustrade:theme', () => { if (REDUCED_MOTION) frame(); });
 }
 
-/* ── Login screen animated line-chart ──────────────────────── */
+/* ── Login screen animated line-chart (runs only while visible) ── */
 function initLoginCanvas() {
   const canvas = document.getElementById('loginCanvas');
-  if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
   const SPACING = 18;    // px between price points
   const SPEED1  = 0.55;  // main line scroll speed (px/frame)
   const SPEED2  = 0.30;  // secondary line (slower "MA")
 
-  let buf1 = [], buf2 = [];
-  let off1 = 0,  off2 = 0;
+  const buf1 = [], buf2 = [];
+  let off1 = 0, off2 = 0;
 
   function loginColors() {
-    const t = document.documentElement.getAttribute('data-theme');
-    if (t === 'blossom') return {
+    const th = document.documentElement.getAttribute('data-theme');
+    if (th === 'blossom') return {
       c1: '#9b5de5', fa1: 'rgba(155,93,229,0.40)', fb1: 'rgba(155,93,229,0)',
       c2: '#ff85a1', fa2: 'rgba(255,133,161,0.22)', fb2: 'rgba(255,133,161,0)',
     };
-    if (t === 'purple') return {
+    if (th === 'purple') return {
       c1: '#00e5ff', fa1: 'rgba(0,229,255,0.25)',   fb1: 'rgba(0,229,255,0)',
       c2: '#c030ff', fa2: 'rgba(192,48,255,0.10)',   fb2: 'rgba(192,48,255,0)',
     };
@@ -301,7 +300,7 @@ function initLoginCanvas() {
 
   function nextP(buf, mean, vol) {
     const last = buf[buf.length - 1] ?? mean;
-    let p = last + (Math.random() - 0.5) * vol + (mean - last) * 0.06;
+    const p = last + (Math.random() - 0.5) * vol + (mean - last) * 0.06;
     return Math.max(10, Math.min(90, p));
   }
 
@@ -322,19 +321,8 @@ function initLoginCanvas() {
     initBuf(buf1, 58, 10);
     initBuf(buf2, 44, 6);
   }
-  resize();
-  window.addEventListener('resize', resize);
 
-  // Smooth bezier through points: draw filled area + stroke line
-  function drawSmoothLine(buf, subOff, lineColor, fillA, fillB, lineW) {
-    const W = canvas.width;
-    const H = canvas.height;
-    const py = p => H * 0.70 - (p / 100) * H * 0.48;
-    const pts = buf.map((p, i) => ({ x: i * SPACING - subOff, y: py(p) }));
-    if (pts.length < 2) return;
-
-    // Draw filled area below the curve
-    ctx.beginPath();
+  function smoothPath(pts) {
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 0; i < pts.length - 1; i++) {
       const mx = (pts[i].x + pts[i + 1].x) / 2;
@@ -342,6 +330,16 @@ function initLoginCanvas() {
       ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
     }
     ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+  }
+
+  function drawSmoothLine(buf, subOff, lineColor, fillA, fillB, lineW) {
+    const H = canvas.height;
+    const py = p => H * 0.70 - (p / 100) * H * 0.48;
+    const pts = buf.map((p, i) => ({ x: i * SPACING - subOff, y: py(p) }));
+    if (pts.length < 2) return;
+
+    ctx.beginPath();
+    smoothPath(pts);
     ctx.lineTo(pts[pts.length - 1].x, H);
     ctx.lineTo(pts[0].x, H);
     ctx.closePath();
@@ -351,51 +349,53 @@ function initLoginCanvas() {
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Draw the line itself on top
     ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const mx = (pts[i].x + pts[i + 1].x) / 2;
-      const my = (pts[i].y + pts[i + 1].y) / 2;
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
-    }
-    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    smoothPath(pts);
     ctx.strokeStyle = lineColor;
     ctx.lineWidth   = lineW;
     ctx.lineJoin    = 'round';
     ctx.stroke();
   }
 
-  let rafId;
   function frame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.globalAlpha = 0.80;
-
     off1 += SPEED1;
     off2 += SPEED2;
     while (off1 >= SPACING) { off1 -= SPACING; buf1.push(nextP(buf1, 58, 10)); buf1.shift(); }
     while (off2 >= SPACING) { off2 -= SPACING; buf2.push(nextP(buf2, 44,  6)); buf2.shift(); }
-
     const c = loginColors();
     drawSmoothLine(buf1, off1, c.c1, c.fa1, c.fb1, 1.8);
     drawSmoothLine(buf2, off2, c.c2, c.fa2, c.fb2, 1.3);
-
     ctx.globalAlpha = 1;
-    rafId = requestAnimationFrame(frame);
   }
 
-  frame();
+  const loop = makeLoop(frame);
+  window.addEventListener('resize', () => { if (!document.getElementById('loginScreen').hidden) resize(); });
+  return {
+    start() { resize(); loop.start(); },
+    stop()  { loop.stop(); },
+  };
 }
 
+let loginCanvas = null;   // controller from initLoginCanvas(), set in init()
+
 /* ── State ─────────────────────────────────────────────────── */
+const _PERIOD_KEY = 'tt_period';
+
 const state = {
-  trades: [],
-  pendingDeleteId: null,
+  loaded: false,          // true once the first load after sign-in finished
+  trades: [],             // every trade in the period (table filters NOT applied)
+  metrics: null,          // /metrics answer for the period
+  pendingDelete: null,    // { ids: [...] } waiting for the confirm modal
   editingId: null,
+  flashId: null,          // trade id to flash once after it was added/edited
   pnlChart: null,
+  chartMode: 'equity',    // equity | daily | drawdown
   selectedIds: new Set(),
-  tableFilter: { symbols: new Set(), side: '' },
+  tableFilter: { symbols: new Set(), side: '', search: '' },
   tableSort:   { col: 'date', dir: 'desc' },
+  range:       { preset: '30', start: null, end: null },
 };
 
 /* ════════════════════════════════════════════════════════════
@@ -404,11 +404,10 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 const dom = {
-  // Toolbar
-  startDate:      $('startDate'),
-  endDate:        $('endDate'),
-  applyFilter:    $('applyFilter'),
-  clearFilter:    $('clearFilter'),
+  // Command bar
+  periodSeg:      $('periodSeg'),
+  periodCaption:  $('periodCaption'),
+  heroPeriod:     $('heroPeriod'),
   addTradeBtn:    $('addTradeBtn'),
 
   // Metrics
@@ -443,17 +442,14 @@ const dom = {
   metricAvgMonthly:     $('metricAvgMonthly'),
   metricAvgMonthlySub:  $('metricAvgMonthlySub'),
 
-  cardWinRate:    $('card-winRate'),
-  cardPnl:          $('card-pnl'),
-  cardTotalLosses:  $('card-totalLosses'),
-  cardDrawdown:     $('card-drawdown'),
-  cardMaxProfit:  $('card-maxProfit'),
-  cardRR:         $('card-rr'),
-  cardStreak:     $('card-streak'),
-  cardTotal:      $('card-total'),
-  cardAvgRoe:     $('card-avgRoe'),
-  cardAvgEntries:  $('card-avgEntries'),
-  cardAvgDuration: $('card-avgDuration'),
+  cardWinRate:     $('card-winRate'),
+  cardPnl:         $('card-pnl'),
+  cardTotalLosses: $('card-totalLosses'),
+  cardDrawdown:    $('card-drawdown'),
+  cardMaxProfit:   $('card-maxProfit'),
+  cardRR:          $('card-rr'),
+  cardStreak:      $('card-streak'),
+  cardAvgRoe:      $('card-avgRoe'),
   cardAvgPnl:      $('card-avgPnl'),
   cardAvgDaily:    $('card-avgDaily'),
   cardAvgWeekly:   $('card-avgWeekly'),
@@ -466,8 +462,10 @@ const dom = {
   retryBtn:     $('retryBtn'),
 
   // Chart
-  pnlChart:     $('pnlChart'),
-  chartEmpty:   $('chartEmpty'),
+  pnlChart:        $('pnlChart'),
+  chartEmpty:      $('chartEmpty'),
+  chartModeSeg:    $('chartModeSeg'),
+  chartFilterChip: $('chartFilterChip'),
 
   // Add Trade Modal
   modalBackdrop: $('modalBackdrop'),
@@ -490,35 +488,29 @@ const dom = {
   fCloseTime: $('fCloseTime'),
   fNotes:     $('fNotes'),
   fEntries:   $('fEntries'),
-  qtyUnit:           $('qtyUnit'),
-  qtyConversion:     $('qtyConversion'),
-  qtyConverted:      $('qtyConverted'),
+  qtyConversion:         $('qtyConversion'),
+  qtyConverted:          $('qtyConverted'),
   leverageNotionalGroup: $('leverageNotionalGroup'),
   leverageNotional:      $('leverageNotional'),
 
-  // Table filter — dropdown wrappers
-  tfDateDropdown:   $('tfDateDropdown'),
-  tfSymbolDropdown: $('tfSymbolDropdown'),
+  // Period — custom range panel
+  tfDateDropdown: $('tfDateDropdown'),
+  tfDateBtn:      $('tfDateBtn'),
+  tfDatePanel:    $('tfDatePanel'),
+  tfStartDate:    $('tfStartDate'),
+  tfEndDate:      $('tfEndDate'),
+  tfApplyDate:    $('tfApplyDate'),
 
-  // Table filter — date dropdown
-  tfDateBtn:    $('tfDateBtn'),
-  tfDatePanel:  $('tfDatePanel'),
-  tfDateLabel:  $('tfDateLabel'),
-  tfStartDate:  $('tfStartDate'),
-  tfEndDate:    $('tfEndDate'),
-  tfApplyDate:  $('tfApplyDate'),
-
-  // Table filter — symbol dropdown
+  // Table filters
+  tfSearch:          $('tfSearch'),
+  tfSymbolDropdown:  $('tfSymbolDropdown'),
   tfSymbolBtn:       $('tfSymbolBtn'),
   tfSymbolPanel:     $('tfSymbolPanel'),
   tfSymbolLabel:     $('tfSymbolLabel'),
   tfSymbolSearch:    $('tfSymbolSearch'),
   tfSymbolList:      $('tfSymbolList'),
-  tfSymbolSelectAll: $('tfSymbolSelectAll'),
   tfSymbolClear:     $('tfSymbolClear'),
-
-  // Table filter — direction
-  filterSide: $('filterSide'),
+  sideSeg:           $('sideSeg'),
 
   // Bulk delete
   bulkDeleteBtn: $('bulkDeleteBtn'),
@@ -527,6 +519,8 @@ const dom = {
 
   // Delete Confirm Modal
   confirmBackdrop:  $('confirmBackdrop'),
+  confirmTitle:     $('confirmTitle'),
+  confirmMsg:       $('confirmMsg'),
   confirmClose:     $('confirmClose'),
   confirmCancelBtn: $('confirmCancelBtn'),
   confirmDeleteBtn: $('confirmDeleteBtn'),
@@ -537,12 +531,16 @@ const dom = {
   templateBtn:  $('templateBtn'),
   csvFileInput: $('csvFileInput'),
 
+  // Header
+  userMenuBtn: $('userMenuBtn'),
+  userMenu:    $('userMenu'),
+
   // Toast
   toastContainer: $('toastContainer'),
 
   // Connection
   connectionStatus: $('connectionStatus'),
-  statusLabel:      document.querySelector('.status-label'),
+  statusLabel:      document.querySelector('#connectionStatus .status-label'),
 };
 
 /* ════════════════════════════════════════════════════════════
@@ -561,16 +559,22 @@ async function apiFetch(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(url, { headers, ...options });
+  const res = await fetch(url, { ...options, headers });
 
   if (res.status === 401) {
-    clearAuth();
-    showLoginScreen();
-    throw new Error('Session expired — please sign in again.');
+    if (getToken()) {
+      clearAuth();
+      doLogout();
+      showToast(t('toast.session.expired'), 'error', 6000);
+    }
+    const err = new Error(t('toast.session.expired'));
+    err.status = 401;
+    throw err;
   }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { const j = await res.json(); msg = j.detail || j.message || msg; } catch (_) {}
+    try { const j = await res.json(); msg = j.detail || j.message || msg; } catch (_) { /* not JSON */ }
+    if (typeof msg !== 'string') msg = JSON.stringify(msg);
     const err = new Error(msg);
     err.status = res.status;
     throw err;
@@ -579,41 +583,46 @@ async function apiFetch(path, options = {}) {
   return res.json();
 }
 
-/** Format a number as currency. */
+const _num = (v) => (v == null || v === '' || isNaN(v)) ? null : Number(v);
+
+/** Signed currency: +$1,234.56 / −$12.00 / $0.00 */
 function formatCurrency(val, decimals = 2) {
-  if (val == null || isNaN(val)) return '—';
-  const abs = Math.abs(val).toFixed(decimals);
-  const formatted = Number(abs).toLocaleString('en-US', { minimumFractionDigits: decimals });
-  return (val >= 0 ? '+' : '−') + '$' + formatted;
+  const n = _num(val);
+  if (n == null) return '—';
+  const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  if (Number(Math.abs(n).toFixed(decimals)) === 0) return '$' + abs;
+  return (n > 0 ? '+' : '−') + '$' + abs;
 }
 
-/** Format a number as percentage. */
-function formatPercent(val, decimals = 1) {
-  if (val == null || isNaN(val)) return '—';
-  return val.toFixed(decimals) + '%';
+/** Percentage with an optional sign. */
+function formatPercent(val, decimals = 1, signed = false) {
+  const n = _num(val);
+  if (n == null) return '—';
+  return (signed && n > 0 ? '+' : '') + n.toFixed(decimals) + '%';
 }
 
 /** Format R:R ratio. */
 function formatRR(val) {
-  if (val == null || isNaN(val)) return '—';
-  return Number(val).toFixed(2) + 'R';
+  const n = _num(val);
+  return n == null ? '—' : n.toFixed(2) + 'R';
 }
 
-/** Format datetime string to short display. */
-function formatDate(isoStr) {
-  if (!isoStr) return '—';
-  const d = new Date(isoStr);
-  if (isNaN(d)) return isoStr;
-  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: '2-digit' })
-    + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
-/** Format duration in ms or seconds to human-readable. */
+/** Minutes → 45m / 3.2h / 1.5d */
 function formatDuration(minutes) {
-  if (minutes == null || isNaN(minutes)) return '—';
-  if (minutes < 60)   return `${Math.round(minutes)}m`;
-  if (minutes < 1440) return `${(minutes / 60).toFixed(1)}h`;
-  return `${(minutes / 1440).toFixed(1)}d`;
+  const n = _num(minutes);
+  if (n == null) return '—';
+  if (n < 60)   return `${Math.round(n)}m`;
+  if (n < 1440) return `${(n / 60).toFixed(1)}h`;
+  return `${(n / 1440).toFixed(1)}d`;
+}
+
+/** Price with precision that suits its size. */
+function formatPrice(val) {
+  const n = _num(val);
+  if (n == null) return '—';
+  const a = Math.abs(n);
+  const d = a >= 1000 ? 2 : a >= 1 ? 4 : a >= 0.01 ? 5 : 8;
+  return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
 /** Escape HTML to prevent XSS. */
@@ -623,7 +632,8 @@ function escHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /** Build query string from object, ignoring null/undefined/empty. */
@@ -635,12 +645,52 @@ function buildQuery(params) {
   return q ? `?${q}` : '';
 }
 
-/** Get current date filter values (table filter panel takes precedence). */
-function getDateRange() {
-  return {
-    start_date: dom.tfStartDate.value || dom.startDate.value || null,
-    end_date:   dom.tfEndDate.value   || dom.endDate.value   || null,
+/** Local calendar date as YYYY-MM-DD (toISOString would give the UTC date). */
+function isoDay(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** YYYY-MM-DD → local Date at midnight. */
+function parseDay(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** The moment a trade counts at: close time, else open time. */
+function tradeTime(tr) { return new Date(tr.close_time ?? tr.open_time); }
+
+/** Read a CSS custom property of the active theme. */
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/** Colour with alpha from a #rrggbb CSS variable value. */
+function withAlpha(hex, a) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
+/**
+ * Tween a number shown in `el` from its previous value to `to`.
+ * `fmt` turns the number into text; the final frame is always exact.
+ */
+function animateNumber(el, to, fmt, duration = 750) {
+  const target = _num(to);
+  cancelAnimationFrame(el._tween || 0);
+  if (target == null) { el.textContent = fmt(null); el._val = null; return; }
+  const from = el._val ?? 0;
+  el._val = target;
+  if (REDUCED_MOTION || from === target || document.hidden) { el.textContent = fmt(target); return; }
+  const t0 = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / duration);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(p < 1 ? from + (target - from) * e : target);
+    if (p < 1) el._tween = requestAnimationFrame(step);
   };
+  el._tween = requestAnimationFrame(step);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -659,22 +709,173 @@ function setConnectionStatus(status, label) {
  * Show a toast notification.
  * @param {string} msg
  * @param {'success'|'error'|'info'} type
- * @param {number} duration ms before auto-dismiss (0 = persistent)
+ * @param {number} duration ms before auto-dismiss (0 = persistent until clicked)
  */
 function showToast(msg, type = 'info', duration = 3500) {
   const icons = { success: '&#10003;', error: '&#10007;', info: '&#8505;' };
   const toast = document.createElement('div');
   toast.className = `toast toast--${type}`;
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span>
     <span class="toast-msg">${escHtml(msg)}</span>`;
+  if (duration > 0) toast.style.setProperty('--toast-life', `${duration}ms`);
   dom.toastContainer.prepend(toast);
 
+  let gone = false;
   const remove = () => {
+    if (gone) return;
+    gone = true;
     toast.classList.add('removing');
-    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+    setTimeout(() => toast.remove(), 320);
   };
-
+  toast.addEventListener('click', remove);
   if (duration > 0) setTimeout(remove, duration);
+}
+
+/* ════════════════════════════════════════════════════════════
+   PERIOD — one date range drives every number on the page
+   ════════════════════════════════════════════════════════════ */
+
+/** {start, end} for a preset, as YYYY-MM-DD (null = open end). */
+function presetRange(preset) {
+  const today = new Date();
+  if (preset === 'all') return { start: null, end: null };
+  if (preset === 'ytd') return { start: isoDay(new Date(today.getFullYear(), 0, 1)), end: isoDay(today) };
+  const from = new Date(today);
+  from.setDate(from.getDate() - Number(preset));
+  return { start: isoDay(from), end: isoDay(today) };
+}
+
+/** Restore the last period (presets are recomputed so "30D" always means the last 30 days). */
+function loadPeriod() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(_PERIOD_KEY)); } catch { /* corrupt entry */ }
+  if (saved?.preset === 'custom' && (saved.start || saved.end)) {
+    state.range = { preset: 'custom', start: saved.start || null, end: saved.end || null };
+  } else if (['7', '30', '90', 'ytd', 'all'].includes(saved?.preset)) {
+    state.range = { preset: saved.preset, ...presetRange(saved.preset) };
+  } else {
+    state.range = { preset: '30', ...presetRange('30') };
+  }
+}
+
+function setPeriod(preset, start = null, end = null) {
+  state.range = preset === 'custom' ? { preset, start, end } : { preset, ...presetRange(preset) };
+  try { localStorage.setItem(_PERIOD_KEY, JSON.stringify(state.range)); } catch { /* storage full/blocked */ }
+  updatePeriodUI();
+  refreshAll();
+}
+
+function getDateRange() {
+  return { start_date: state.range.start, end_date: state.range.end };
+}
+
+function periodShortLabel() {
+  const p = state.range.preset;
+  if (p === 'all') return t('period.alltime');
+  if (p === 'ytd') return t('period.ytd');
+  if (p === 'custom') return t('filter.custom');
+  return `${p}D`;
+}
+
+function updatePeriodUI() {
+  if (!dom.periodSeg) return;
+  const { preset, start, end } = state.range;
+  dom.periodSeg.querySelectorAll('.period-btn[data-preset]').forEach(b => {
+    b.classList.toggle('is-active', b.dataset.preset === preset);
+  });
+  dom.tfDateBtn.classList.toggle('is-active', preset === 'custom');
+  dom.tfStartDate.value = start || '';
+  dom.tfEndDate.value   = end || '';
+
+  const fmt = (s) => parseDay(s).toLocaleDateString(uiLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
+  let caption;
+  if (start && end) {
+    const days = Math.round((parseDay(end) - parseDay(start)) / 86400000) + 1;
+    caption = `${fmt(start)} – ${fmt(end)} · ${days} ${t(days === 1 ? 'period.day' : 'period.days')}`;
+  } else if (start) {
+    caption = `${t('period.since')} ${fmt(start)}`;
+  } else if (end) {
+    caption = `${t('period.until')} ${fmt(end)}`;
+  } else {
+    caption = t('period.alltime');
+  }
+  dom.periodCaption.textContent = caption;
+  dom.heroPeriod.textContent = periodShortLabel();
+}
+
+/* ════════════════════════════════════════════════════════════
+   DATA
+   ════════════════════════════════════════════════════════════ */
+
+/** Skeleton shimmer on every metric value while a load is in flight. */
+function setMetricsLoading(on) {
+  document.querySelectorAll('.metric-value').forEach(el => el.classList.toggle('skeleton', on));
+}
+
+let _loadSeq = 0;
+
+/** Load metrics + trades for the period, then render everything once. */
+async function loadDashboard() {
+  const seq = ++_loadSeq;
+  const { start_date, end_date } = getDateRange();
+  const qs = buildQuery({ start_date, end_date });
+  dom.tableError.hidden = true;
+  setMetricsLoading(true);
+  if (!state.loaded) {
+    dom.tradesBody.innerHTML = `<tr class="table-empty-row"><td colspan="15">${escHtml(t('table.loading'))}</td></tr>`;
+  }
+
+  const [m, tr] = await Promise.allSettled([apiFetch(`/metrics${qs}`), apiFetch(`/trades${qs}`)]);
+  if (seq !== _loadSeq) return;   // a newer load started (period clicked again) — drop this one
+
+  setMetricsLoading(false);
+  if (m.status === 'fulfilled') {
+    state.metrics = m.value;
+    setConnectionStatus('connected', t('header.connected'));
+  } else {
+    state.metrics = null;
+    if (m.reason?.status !== 401) {
+      setConnectionStatus('error', t('header.offline'));
+      console.error('metrics:', m.reason);
+    }
+  }
+  if (tr.status === 'fulfilled') {
+    const v = tr.value;
+    state.trades = Array.isArray(v) ? v : (v.items ?? v.data ?? []);
+  } else {
+    state.trades = [];
+    if (tr.reason?.status !== 401) {
+      dom.tableError.hidden = false;
+      console.error('trades:', tr.reason);
+    }
+  }
+  state.loaded = true;
+  populateSymbolList();
+  renderAll();
+}
+
+/** Draw everything from state (no network). */
+function renderAll() {
+  renderMetrics();
+  renderFiltered();
+}
+
+/** Table, chart and insights — everything the table filters touch. */
+function renderFiltered() {
+  const filtered = applyTableFilters(state.trades);
+  renderTradesTable(filtered);
+  renderChart(filtered);
+  updateFilterChip();
+  window.Insights?.render(state.trades, filtered);
+}
+
+async function refreshAll() {
+  await Promise.all([
+    loadDashboard(),
+    // Fund Pool registers this after its IIFE runs (see initPool)
+    window.refreshPool ? window.refreshPool() : Promise.resolve(),
+  ]);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -682,168 +883,13 @@ function showToast(msg, type = 'info', duration = 3500) {
    ════════════════════════════════════════════════════════════ */
 
 /**
- * Fetch /metrics endpoint and update metric cards.
- * @param {string|null} startDate ISO date string
- * @param {string|null} endDate   ISO date string
- */
-async function fetchMetrics(startDate, endDate) {
-  // Skeleton loading
-  const cards = [dom.metricWinRate, dom.metricPnl, dom.metricTotalLosses, dom.metricDrawdown, dom.metricMaxProfit, dom.metricRR, dom.metricStreak, dom.metricTotal, dom.metricAvgRoe, dom.metricAvgEntries, dom.metricAvgDuration, dom.metricAvgPnl, dom.metricAvgDaily, dom.metricAvgWeekly, dom.metricAvgMonthly];
-  cards.forEach(el => { el.textContent = '···'; el.classList.add('skeleton'); });
-
-  try {
-    const qs = buildQuery({ start_date: startDate, end_date: endDate });
-    const data = await apiFetch(`/metrics${qs}`);
-    renderMetrics(data, startDate, endDate);
-    setConnectionStatus('connected', t('header.connected'));
-  } catch (err) {
-    cards.forEach(el => { el.textContent = '—'; el.classList.remove('skeleton'); });
-    setConnectionStatus('error', t('header.offline'));
-    console.error('fetchMetrics:', err);
-  }
-}
-
-/**
  * Count distinct calendar months touched by a [start, end] date-only range,
  * inclusive. E.g. 2026-06-27 → 2026-07-27 spans June and July = 2.
  */
 function monthsSpanned(startDate, endDate) {
-  const start = new Date(startDate);
-  const end   = new Date(endDate);
-  return (end.getUTCFullYear() - start.getUTCFullYear()) * 12
-       + (end.getUTCMonth() - start.getUTCMonth()) + 1;
-}
-
-/**
- * Render metric data into the DOM.
- * @param {Object} data
- * @param {string|null} startDate ISO date string of the active filter (or null for "All time")
- * @param {string|null} endDate   ISO date string of the active filter (or null for "All time")
- */
-function renderMetrics(data, startDate, endDate) {
-  const {
-    win_rate,
-    total_pnl,
-    total_losses,
-    max_drawdown,
-    avg_rr,
-    current_streak,
-    streak_type,
-    total_trades,
-    winning_trades,
-    losing_trades,
-  } = data;
-
-  // Win Rate
-  dom.metricWinRate.textContent = win_rate != null ? formatPercent(win_rate) : '—';
-  dom.metricWinRate.classList.remove('skeleton');
-  dom.metricWinRateSub.textContent = `${winning_trades ?? 0}W / ${losing_trades ?? 0}L`;
-  applyCardColor(dom.cardWinRate, win_rate >= 50 ? 'positive' : 'negative');
-
-  // Total P&L
-  dom.metricPnl.textContent = total_pnl != null ? formatCurrency(total_pnl) : '—';
-  dom.metricPnl.classList.remove('skeleton');
-  dom.metricPnlSub.textContent = t('metric.realized');
-  applyCardColor(dom.cardPnl, total_pnl > 0 ? 'positive' : total_pnl < 0 ? 'negative' : '');
-
-  // Total Losses — use backend value if available, otherwise sum losing trades from state
-  const total_losses_val = total_losses != null
-    ? total_losses
-    : (state.trades && state.trades.length
-        ? state.trades.reduce((sum, tr) => { const p = tr.pnl ?? 0; return p < 0 ? sum + p : sum; }, 0)
-        : null);
-  dom.metricTotalLosses.textContent = total_losses_val != null ? formatCurrency(total_losses_val) : '—';
-  dom.metricTotalLosses.classList.remove('skeleton');
-  dom.metricTotalLossesSub.textContent = `${losing_trades ?? 0} ${t('metric.losingtrades')}`;
-  applyCardColor(dom.cardTotalLosses, 'negative');
-
-  // Max Drawdown
-  dom.metricDrawdown.textContent = max_drawdown != null ? formatCurrency(max_drawdown > 0 ? -max_drawdown : max_drawdown) : '—';
-  dom.metricDrawdown.classList.remove('skeleton');
-  dom.metricDrawdownSub.textContent = t('metric.peaktotrough');
-  applyCardColor(dom.cardDrawdown, 'negative');
-
-  // Max Profit — use backend value if available, otherwise derive from state.trades
-  const max_profit = data.max_profit != null
-    ? data.max_profit
-    : (state.trades && state.trades.length
-        ? Math.max(...state.trades.map(t => t.pnl ?? 0))
-        : null);
-  dom.metricMaxProfit.textContent = max_profit != null ? formatCurrency(max_profit) : '—';
-  dom.metricMaxProfit.classList.remove('skeleton');
-  dom.metricMaxProfitSub.textContent = t('metric.besttrade');
-  applyCardColor(dom.cardMaxProfit, max_profit > 0 ? 'positive' : max_profit < 0 ? 'negative' : '');
-
-  // Avg R:R
-  dom.metricRR.textContent = avg_rr != null ? formatRR(avg_rr) : '—';
-  dom.metricRR.classList.remove('skeleton');
-  dom.metricRRSub.textContent = avg_rr >= 1 ? t('metric.favorable') : avg_rr != null ? t('metric.unfavorable') : '';
-  applyCardColor(dom.cardRR, avg_rr >= 1 ? 'positive' : avg_rr != null ? 'negative' : '');
-
-  // Streak
-  const streakAbs = Math.abs(current_streak ?? 0);
-  const streakType = streak_type || (current_streak > 0 ? 'win' : current_streak < 0 ? 'loss' : '');
-  const streakLabel = streakAbs > 0 ? (streakType === 'win' ? `W${streakAbs}` : `L${streakAbs}`) : '—';
-  dom.metricStreak.innerHTML = streakAbs > 0
-    ? `<span class="streak-badge streak-${streakType === 'win' ? 'win' : 'loss'}">${escHtml(streakLabel)}</span>`
-    : '—';
-  dom.metricStreak.classList.remove('skeleton');
-  dom.metricStreakSub.textContent = streakType === 'win' ? t('metric.winstreak') : streakType === 'loss' ? t('metric.lossstreak') : '';
-
-  // Total Trades
-  dom.metricTotal.textContent = total_trades ?? '0';
-  dom.metricTotal.classList.remove('skeleton');
-  dom.metricTotalSub.textContent = t('metric.closedpos');
-
-  // Avg ROE %
-  const avg_roe = data.avg_roe;
-  dom.metricAvgRoe.textContent = avg_roe != null ? formatPercent(avg_roe) : '—';
-  dom.metricAvgRoe.classList.remove('skeleton');
-  dom.metricAvgRoeSub.textContent = t('metric.pertrade');
-  applyCardColor(dom.cardAvgRoe, avg_roe > 0 ? 'positive' : avg_roe < 0 ? 'negative' : '');
-
-  // Avg Entries
-  const avg_entries = data.avg_entries;
-  dom.metricAvgEntries.textContent = avg_entries != null && avg_entries > 0 ? Number(avg_entries).toFixed(1) : '—';
-  dom.metricAvgEntries.classList.remove('skeleton');
-  dom.metricAvgEntriesSub.textContent = t('metric.entriespertrade');
-
-  // Avg Duration
-  const avg_duration = data.avg_duration;
-  dom.metricAvgDuration.textContent = avg_duration != null && avg_duration > 0 ? formatDuration(avg_duration) : '—';
-  dom.metricAvgDuration.classList.remove('skeleton');
-  dom.metricAvgDurationSub.textContent = t('metric.pertrade');
-
-  // Avg P&L — use backend value if available, otherwise derive from total_pnl / total_trades
-  const avg_pnl = data.avg_pnl != null
-    ? data.avg_pnl
-    : (total_trades > 0 ? total_pnl / total_trades : null);
-  dom.metricAvgPnl.textContent = avg_pnl != null ? formatCurrency(avg_pnl) : '—';
-  dom.metricAvgPnl.classList.remove('skeleton');
-  dom.metricAvgPnlSub.textContent = t('metric.pertrade');
-  applyCardColor(dom.cardAvgPnl, avg_pnl > 0 ? 'positive' : avg_pnl < 0 ? 'negative' : '');
-
-  // Avg Daily / Weekly / Monthly — $ and ROE% averaged per active calendar period
-  renderPeriodAverage(dom.metricAvgDaily, dom.metricAvgDailySub, dom.cardAvgDaily, data.avg_daily_pnl, data.avg_daily_roe);
-  renderPeriodAverage(dom.metricAvgWeekly, dom.metricAvgWeeklySub, dom.cardAvgWeekly, data.avg_weekly_pnl, data.avg_weekly_roe);
-
-  // Avg Monthly only means something once the filter covers more than 2
-  // calendar months — shorter windows collapse to 1-2 active month buckets,
-  // which just echoes the weekly/total figures rather than a real average.
-  // No explicit range ("All time") always shows it.
-  const monthlyMeaningful = !startDate || !endDate || monthsSpanned(startDate, endDate) > 2;
-  dom.cardAvgMonthly.style.display = monthlyMeaningful ? '' : 'none';
-  if (monthlyMeaningful) {
-    renderPeriodAverage(dom.metricAvgMonthly, dom.metricAvgMonthlySub, dom.cardAvgMonthly, data.avg_monthly_pnl, data.avg_monthly_roe);
-  }
-}
-
-/** Render a combined $ + ROE% metric card (used for the daily/weekly/monthly averages). */
-function renderPeriodAverage(valueEl, subEl, cardEl, pnl, roe) {
-  valueEl.textContent = pnl != null ? formatCurrency(pnl) : '—';
-  valueEl.classList.remove('skeleton');
-  subEl.textContent = roe != null ? `${formatPercent(roe)} ${t('metric.avgroe.short')}` : ' ';
-  applyCardColor(cardEl, pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : '');
+  const start = parseDay(startDate);
+  const end   = parseDay(endDate);
+  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
 }
 
 function applyCardColor(cardEl, type) {
@@ -851,198 +897,293 @@ function applyCardColor(cardEl, type) {
   if (type) cardEl.classList.add(type);
 }
 
+const _signTone = (v) => (v > 0 ? 'positive' : v < 0 ? 'negative' : '');
+
+/** Money metric: animated value + card tone from the sign. */
+function setMoney(valueEl, cardEl, v, tone = _signTone(v)) {
+  animateNumber(valueEl, v, (x) => formatCurrency(x));
+  if (cardEl) applyCardColor(cardEl, _num(v) == null ? '' : tone);
+}
+
+function renderMetrics() {
+  const data = state.metrics || {};
+  const trades = state.trades;
+  const n = trades.length;
+  const {
+    win_rate, total_pnl, total_losses, max_drawdown, avg_rr,
+    current_streak, streak_type, total_trades, winning_trades, losing_trades,
+  } = data;
+  const hasData = state.metrics != null;
+
+  // Net P&L (hero)
+  setMoney(dom.metricPnl, dom.cardPnl, hasData ? total_pnl : null);
+  dom.metricPnlSub.textContent = hasData
+    ? `${t('metric.realized')} · ${total_trades ?? 0} ${t(total_trades === 1 ? 'unit.trade' : 'unit.trades')}`
+    : ' ';
+
+  // Win rate (edge ring centre; the ring itself is drawn by insights.js)
+  animateNumber(dom.metricWinRate, hasData && total_trades ? win_rate : null, (x) => formatPercent(x));
+  dom.metricWinRateSub.textContent = hasData ? `${winning_trades ?? 0}W · ${losing_trades ?? 0}L` : ' ';
+  applyCardColor(dom.cardWinRate, hasData && total_trades ? (win_rate >= 50 ? 'positive' : 'negative') : '');
+
+  // Total losses — 0 is not bad news, so it stays neutral
+  setMoney(dom.metricTotalLosses, dom.cardTotalLosses, hasData ? (total_losses ?? 0) : null,
+    total_losses < 0 ? 'negative' : '');
+  dom.metricTotalLossesSub.textContent = hasData ? `${losing_trades ?? 0} ${t('metric.losingtrades')}` : ' ';
+
+  // Max drawdown — shown as a negative amount
+  const dd = hasData ? -Math.abs(max_drawdown ?? 0) : null;
+  setMoney(dom.metricDrawdown, dom.cardDrawdown, dd, dd < 0 ? 'negative' : '');
+  dom.metricDrawdownSub.textContent = t('metric.peaktotrough');
+
+  // Max profit — backend value, else the best trade in the period
+  const maxProfit = data.max_profit ?? (n ? Math.max(...trades.map(x => x.pnl ?? 0)) : null);
+  setMoney(dom.metricMaxProfit, dom.cardMaxProfit, hasData ? maxProfit : null);
+  dom.metricMaxProfitSub.textContent = t('metric.besttrade');
+
+  // Avg R:R — only meaningful when trades actually logged an R:R
+  const rrLogged = trades.some(x => _num(x.risk_reward ?? x.rr) != null);
+  if (hasData && rrLogged && avg_rr != null) {
+    animateNumber(dom.metricRR, avg_rr, formatRR);
+    dom.metricRRSub.textContent = avg_rr >= 1 ? t('metric.favorable') : t('metric.unfavorable');
+    applyCardColor(dom.cardRR, avg_rr >= 1 ? 'positive' : 'negative');
+  } else {
+    animateNumber(dom.metricRR, null, () => '—');
+    dom.metricRRSub.textContent = hasData ? t('metric.norr') : ' ';
+    applyCardColor(dom.cardRR, '');
+  }
+
+  // Streak
+  const streakAbs  = Math.abs(current_streak ?? 0);
+  const streakType = streak_type || (current_streak > 0 ? 'win' : current_streak < 0 ? 'loss' : '');
+  dom.metricStreak.innerHTML = hasData && streakAbs > 0
+    ? `<span class="streak-badge streak-${streakType === 'win' ? 'win' : 'loss'}">${streakType === 'win' ? 'W' : 'L'}${streakAbs}</span>`
+    : '—';
+  dom.metricStreakSub.textContent = streakType === 'win' ? t('metric.winstreak') : streakType === 'loss' ? t('metric.lossstreak') : ' ';
+  applyCardColor(dom.cardStreak, hasData && streakAbs ? (streakType === 'win' ? 'positive' : 'negative') : '');
+
+  // Total trades
+  animateNumber(dom.metricTotal, hasData ? (total_trades ?? 0) : null, (x) => (x == null ? '—' : String(Math.round(x))));
+  dom.metricTotalSub.textContent = t('metric.closedpos');
+
+  // Avg ROE %
+  animateNumber(dom.metricAvgRoe, hasData ? data.avg_roe : null, (x) => formatPercent(x, 1, true));
+  dom.metricAvgRoeSub.textContent = t('metric.pertrade');
+  applyCardColor(dom.cardAvgRoe, hasData ? _signTone(data.avg_roe) : '');
+
+  // Avg entries
+  const avgEntries = data.avg_entries > 0 ? data.avg_entries : null;
+  animateNumber(dom.metricAvgEntries, hasData ? avgEntries : null, (x) => (x == null ? '—' : x.toFixed(1)));
+  dom.metricAvgEntriesSub.textContent = t('metric.entriespertrade');
+
+  // Avg duration
+  const avgDur = data.avg_duration > 0 ? data.avg_duration : null;
+  animateNumber(dom.metricAvgDuration, hasData ? avgDur : null, formatDuration);
+  dom.metricAvgDurationSub.textContent = t('metric.pertrade');
+
+  // Avg P&L — backend value, else total / count
+  const avgPnl = data.avg_pnl ?? (total_trades > 0 ? total_pnl / total_trades : null);
+  setMoney(dom.metricAvgPnl, dom.cardAvgPnl, hasData ? avgPnl : null);
+  dom.metricAvgPnlSub.textContent = t('metric.pertrade');
+
+  // Avg Daily / Weekly / Monthly — $ and ROE% averaged per active calendar period
+  renderPeriodAverage(dom.metricAvgDaily, dom.metricAvgDailySub, dom.cardAvgDaily, data.avg_daily_pnl, data.avg_daily_roe);
+  renderPeriodAverage(dom.metricAvgWeekly, dom.metricAvgWeeklySub, dom.cardAvgWeekly, data.avg_weekly_pnl, data.avg_weekly_roe);
+
+  // Avg Monthly only means something once the period covers more than 2
+  // calendar months — shorter windows collapse to 1-2 active month buckets,
+  // which just echoes the weekly/total figures rather than a real average.
+  const { start, end } = state.range;
+  const monthlyMeaningful = !start || !end || monthsSpanned(start, end) > 2;
+  if (monthlyMeaningful) {
+    renderPeriodAverage(dom.metricAvgMonthly, dom.metricAvgMonthlySub, dom.cardAvgMonthly, data.avg_monthly_pnl, data.avg_monthly_roe);
+    dom.cardAvgMonthly.classList.remove('is-muted');
+  } else {
+    animateNumber(dom.metricAvgMonthly, null, () => '—');
+    dom.metricAvgMonthlySub.textContent = t('metric.monthlyneeds');
+    applyCardColor(dom.cardAvgMonthly, '');
+    dom.cardAvgMonthly.classList.add('is-muted');
+  }
+}
+
+/** A combined $ + ROE% card (daily/weekly/monthly averages). */
+function renderPeriodAverage(valueEl, subEl, cardEl, pnl, roe) {
+  setMoney(valueEl, cardEl, state.metrics ? pnl : null);
+  subEl.textContent = _num(roe) != null ? `${formatPercent(roe, 1, true)} ${t('metric.avgroe.short')}` : ' ';
+}
+
 /* ════════════════════════════════════════════════════════════
    TRADES TABLE
    ════════════════════════════════════════════════════════════ */
 
-/**
- * Fetch /trades endpoint and render the table.
- * @param {string|null} startDate
- * @param {string|null} endDate
- */
-async function fetchTrades(startDate, endDate) {
-  dom.tableError.hidden = true;
-
-  // Loading row
-  dom.tradesBody.innerHTML = `
-    <tr class="table-empty-row">
-      <td colspan="12">${t('table.loading')}</td>
-    </tr>`;
-
-  try {
-    const qs = buildQuery({ start_date: startDate, end_date: endDate });
-    const trades = await apiFetch(`/trades${qs}`);
-    state.trades = Array.isArray(trades) ? trades : (trades.items ?? trades.data ?? []);
-    populateSymbolList(state.trades);
-    renderTradesTable(state.trades);
-    renderChart(state.trades);
-  } catch (err) {
-    dom.tradesBody.innerHTML = `
-      <tr class="table-empty-row">
-        <td colspan="12">${t('table.error')}</td>
-      </tr>`;
-    dom.tableError.hidden = false;
-    console.error('fetchTrades:', err);
-  }
-}
-
-/**
- * Render trades array into the table body.
- * @param {Array} trades
- */
 function applySortIndicators() {
   const { col, dir } = state.tableSort;
   document.querySelectorAll('.trades-table th[data-sort]').forEach(th => {
     const isActive = th.dataset.sort === col;
     th.classList.toggle('sort-active', isActive);
-    th.classList.toggle('sort-asc',  isActive && dir === 'asc');
-    th.classList.toggle('sort-desc', isActive && dir === 'desc');
-
-    const arrow = th.querySelector('.sort-arrow');
-    if (!arrow) return;
-
-    if (isActive) {
-      const accentColor = getComputedStyle(document.documentElement)
-        .getPropertyValue('--accent-primary').trim() || '#39ff14';
-      arrow.textContent = dir === 'asc' ? ' ↑' : ' ↓';
-      arrow.style.cssText = `color:${accentColor};font-size:16px;font-weight:700;line-height:1;vertical-align:middle;`;
-    } else {
-      arrow.textContent = ' ↕';
-      arrow.style.cssText = 'color:#888;font-size:13px;font-weight:400;line-height:1;vertical-align:middle;';
-    }
+    th.setAttribute('aria-sort', isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    th.querySelector('.sort-arrow').textContent = isActive ? (dir === 'asc' ? '↑' : '↓') : '↕';
   });
 }
 
 function sortTrades(trades) {
   const { col, dir } = state.tableSort;
-  if (!col) return trades;
-  return [...trades].sort((a, b) => {
-    let aVal, bVal;
-    if (col === 'date') {
-      aVal = new Date(a.close_time ?? a.open_time ?? 0).getTime();
-      bVal = new Date(b.close_time ?? b.open_time ?? 0).getTime();
-    } else if (col === 'pnl') {
-      aVal = parseFloat(a.pnl ?? a.profit_loss ?? 0);
-      bVal = parseFloat(b.pnl ?? b.profit_loss ?? 0);
-    } else if (col === 'roe') {
-      aVal = parseFloat(a.roe ?? 0);
-      bVal = parseFloat(b.roe ?? 0);
-    } else {
-      return 0;
+  const key = {
+    date: (x) => tradeTime(x).getTime() || 0,
+    pnl:  (x) => Number(x.pnl ?? 0),
+    roe:  (x) => Number(x.roe ?? 0),
+  }[col];
+  if (!key) return trades;
+  return [...trades].sort((a, b) => (dir === 'asc' ? key(a) - key(b) : key(b) - key(a)));
+}
+
+/** Table filters (symbol, side, search). `opts.ignoreSymbols` keeps every symbol. */
+function applyTableFilters(trades, opts = {}) {
+  const { symbols, side, search } = state.tableFilter;
+  const q = search.trim().toLowerCase();
+  return trades.filter(tr => {
+    if (!opts.ignoreSymbols && symbols.size && !symbols.has((tr.symbol || '').toUpperCase())) return false;
+    if (side && (tr.side || '').toLowerCase() !== side) return false;
+    if (q) {
+      const hay = `${tr.symbol || ''} ${tr.side || ''} ${tr.notes || ''} ${tr.source || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
     }
-    return dir === 'asc' ? aVal - bVal : bVal - aVal;
+    return true;
   });
 }
 
-function applyTableFilters(trades) {
-  const { symbols, side } = state.tableFilter;
-  return trades.filter(t => {
-    const symMatch = symbols.size === 0 || symbols.has((t.symbol || '').toUpperCase());
-    const sideMatch = !side || (t.side || '').toLowerCase() === side;
-    return symMatch && sideMatch;
-  });
+/** Stable hue per coin, so a symbol always gets the same dot colour. */
+function symbolHue(sym) {
+  let h = 0;
+  for (const ch of sym) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return h;
 }
 
-function renderTradesTable(trades) {
-  const filtered = applyTableFilters(trades);
-  dom.tradeCount.textContent = `${filtered.length} trade${filtered.length !== 1 ? 's' : ''}${filtered.length !== trades.length ? ` (of ${trades.length})` : ''}`;
-  trades = sortTrades(filtered);
+function symbolHtml(symbol) {
+  const s = String(symbol || '—').toUpperCase();
+  const [base, quote] = s.includes('/') ? s.split('/') : [s, ''];
+  return `<span class="sym"><i class="sym-dot" style="--h:${symbolHue(base)}">${escHtml(base.charAt(0))}</i>`
+    + `<b>${escHtml(base)}</b>${quote ? `<span class="sym-quote">/${escHtml(quote)}</span>` : ''}</span>`;
+}
+
+function renderTradesTable(filtered) {
+  const total = state.trades.length;
+  dom.tradeCount.textContent = filtered.length === total
+    ? `${total} ${t(total === 1 ? 'unit.trade' : 'unit.trades')}`
+    : `${filtered.length} / ${total}`;
   applySortIndicators();
-
-  if (!trades.length) {
-    dom.tradesBody.innerHTML = `
-      <tr class="table-empty-row" id="tableEmpty">
-        <td colspan="12">${t('table.empty')}</td>
-      </tr>`;
-    return;
-  }
 
   state.selectedIds.clear();
   updateSelectionUI();
 
-  const rows = trades.map((trade) => {
-    const pnl     = parseFloat(trade.pnl ?? trade.profit_loss ?? 0);
-    const pnlSign = pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : '';
+  if (!filtered.length) {
+    const msg = total ? t('table.nomatch') : t('table.empty');
+    dom.tradesBody.innerHTML = `<tr class="table-empty-row"><td colspan="15">${escHtml(msg)}</td></tr>`;
+    return;
+  }
+
+  const rows = sortTrades(filtered);
+  const maxAbs = Math.max(...rows.map(r => Math.abs(Number(r.pnl) || 0)), 1e-9);
+  const thisYear = new Date().getFullYear();
+  const loc = uiLocale();
+
+  dom.tradesBody.innerHTML = rows.map((trade, i) => {
+    const id      = escHtml(trade.id ?? '');
+    const pnl     = Number(trade.pnl ?? 0);
+    const tone    = _signTone(pnl);
     const side    = (trade.side ?? '').toLowerCase();
-    const sideClass = side === 'long' ? 'td-side-long' : side === 'short' ? 'td-side-short' : '';
-
-    const durationMins = trade.duration_minutes
-      ?? trade.duration
-      ?? calcDurationMinutes(trade.open_time, trade.close_time);
-
-    const rr = trade.rr ?? trade.risk_reward ?? trade.r_r;
-
-    return `<tr data-id="${escHtml(trade.id ?? '')}">
-      <td><input type="checkbox" data-select="${escHtml(trade.id ?? '')}" /></td>
-      <td class="td-mono">${formatDate(trade.close_time ?? trade.open_time)}</td>
-      <td class="td-symbol">${escHtml(trade.symbol ?? '—')}</td>
-      <td class="${sideClass}">${escHtml(side.charAt(0).toUpperCase() + side.slice(1) || '—')}</td>
-      <td class="td-mono">${formatPrice(trade.entry_price)}</td>
-      <td class="td-mono">${formatPrice(trade.exit_price)}</td>
-      <td class="td-mono">${trade.quantity != null ? Number(trade.quantity).toLocaleString() : '—'}</td>
-      <td class="td-pnl ${pnlSign}">${formatCurrency(pnl)}</td>
-      <td class="td-roe ${pnlSign}">${trade.roe != null ? (trade.roe > 0 ? '+' : '') + Number(trade.roe).toFixed(2) + '%' : '—'}</td>
-      <td class="td-rr">${rr != null ? formatRR(rr) : '—'}</td>
-      <td class="td-leverage">${trade.leverage != null ? escHtml(trade.leverage) + 'x' : '—'}</td>
-      <td class="td-mono">${formatDuration(durationMins)}</td>
+    const d       = tradeTime(trade);
+    const dateTxt = isNaN(d) ? '—' : d.toLocaleDateString(loc, { month: 'short', day: 'numeric', ...(d.getFullYear() !== thisYear && { year: 'numeric' }) });
+    const timeTxt = isNaN(d) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const dur     = trade.duration_minutes ?? calcDurationMinutes(trade.open_time, trade.close_time);
+    const rr      = trade.risk_reward ?? trade.rr;
+    const qty     = Number(trade.quantity);
+    const roe     = _num(trade.roe);
+    const sideTxt = side === 'long' ? t('filter.long') : side === 'short' ? t('filter.short') : '—';
+    const flash   = String(trade.id) === String(state.flashId) ? ' row-new' : '';
+    return `<tr data-id="${id}" class="${tone ? `row-${tone}` : ''}${flash}" style="--i:${Math.min(i, 20)}">
+      <td class="td-check"><input type="checkbox" data-select="${id}" aria-label="Select trade" /></td>
+      <td class="td-date"><span class="d-day">${escHtml(dateTxt)}</span><span class="d-time">${escHtml(timeTxt)}</span></td>
+      <td>${symbolHtml(trade.symbol)}</td>
+      <td><span class="side-chip side-${side || 'none'}">${side === 'long' ? '▲' : side === 'short' ? '▼' : ''} ${escHtml(sideTxt)}</span></td>
+      <td class="td-num">${formatPrice(trade.entry_price)}</td>
+      <td class="td-num">${formatPrice(trade.exit_price)}</td>
+      <td class="td-num td-dim">${qty > 0 ? qty.toLocaleString('en-US', { maximumFractionDigits: 6 }) : '—'}</td>
+      <td class="td-num td-pnl ${tone}"><span class="pnl-bar" style="--w:${(Math.abs(pnl) / maxAbs * 100).toFixed(1)}%"></span><span class="pnl-val">${formatCurrency(pnl)}</span></td>
+      <td class="td-num">${roe == null ? '—' : `<span class="roe-pill ${tone}">${formatPercent(roe, 2, true)}</span>`}</td>
+      <td class="td-num td-dim">${_num(rr) != null ? formatRR(rr) : '—'}</td>
+      <td class="td-num td-lev">${trade.leverage != null ? escHtml(Number(trade.leverage)) + '×' : '—'}</td>
+      <td class="td-num td-dim">${formatDuration(dur)}</td>
       <td><span class="td-source">${escHtml(trade.source ?? 'manual')}</span></td>
       <td class="td-notes" title="${escHtml(trade.notes ?? '')}">${escHtml(trade.notes ?? '')}</td>
-      <td>
-        <button class="action-btn action-btn--edit"
-          aria-label="Edit trade ${escHtml(trade.symbol ?? '')}"
-          data-action="edit" data-id="${escHtml(trade.id ?? '')}">&#9998;</button>
-        <button class="action-btn action-btn--delete"
-          aria-label="Delete trade ${escHtml(trade.symbol ?? '')}"
-          data-action="delete" data-id="${escHtml(trade.id ?? '')}">&#128465;</button>
+      <td class="td-actions">
+        <button class="action-btn action-btn--edit" type="button" aria-label="Edit trade ${escHtml(trade.symbol ?? '')}"
+          title="Edit" data-action="edit" data-id="${id}"><svg class="ico"><use href="#i-edit"/></svg></button>
+        <button class="action-btn action-btn--delete" type="button" aria-label="Delete trade ${escHtml(trade.symbol ?? '')}"
+          title="Delete" data-action="delete" data-id="${id}"><svg class="ico"><use href="#i-trash"/></svg></button>
       </td>
     </tr>`;
-  });
+  }).join('');
 
-  dom.tradesBody.innerHTML = rows.join('');
+  if (state.flashId != null) {
+    dom.tradesBody.querySelector('.row-new')?.scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'center' });
+    state.flashId = null;
+  }
 }
 
-/** Format a price value cleanly. */
-function formatPrice(val) {
-  if (val == null || isNaN(val)) return '—';
-  const n = parseFloat(val);
-  return n >= 1000
-    ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : n.toFixed(4);
+/** Scroll to and pulse the rows of these trades (chart point / calendar day clicks). */
+function focusTrades(ids) {
+  const want = new Set(ids.map(String));
+  dom.tradesBody.querySelectorAll('tr.trade-highlight').forEach(r => r.classList.remove('trade-highlight'));
+  const rows = [...dom.tradesBody.querySelectorAll('tr[data-id]')].filter(r => want.has(r.dataset.id));
+  if (!rows.length) {
+    showToast(t('toast.hiddenbyfilter'), 'info');
+    return;
+  }
+  rows.forEach(r => {
+    r.classList.remove('trade-highlight');
+    void r.offsetWidth;            // restart the pulse animation
+    r.classList.add('trade-highlight');
+  });
+  rows[0].scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'center' });
 }
 
 /**
- * Extract base coin from symbol string. e.g. "BTC/USDT" → "BTC"
+ * Quantity is always entered in USDT; show what that is in coins.
  */
 function parseCoin(symbol) {
   if (!symbol) return 'COIN';
   return symbol.split('/')[0].trim().toUpperCase() || 'COIN';
 }
 
-/**
- * Update quantity label unit and conversion display based on current form values.
- * Long positions: qty is in USDT → convert to coin (qty / entry_price)
- * Short positions: qty is already in coin units
- */
 function updateQtyConversion() {
   const entry = parseFloat(dom.fEntry.value);
   const qty   = parseFloat(dom.fQty.value);
   const coin  = parseCoin(dom.fSymbol.value);
-
-  // Quantity is always entered in USDT regardless of side
-  dom.qtyUnit.textContent = 'USDT';
-  dom.qtyUnit.style.display = '';
-
   if (!isNaN(entry) && entry > 0 && !isNaN(qty) && qty > 0) {
     const coinAmt = qty / entry;
     const decimals = coinAmt < 0.001 ? 8 : coinAmt < 1 ? 6 : 4;
     dom.qtyConverted.textContent = coinAmt.toFixed(decimals) + ' ' + coin;
-    dom.qtyConversion.style.display = '';
+    dom.qtyConversion.hidden = false;
   } else {
-    dom.qtyConversion.style.display = 'none';
+    dom.qtyConversion.hidden = true;
   }
 }
 
-/** Calculate duration in minutes from two ISO strings. */
+/** Real capital (margin) = position size / leverage. */
+function updateNotional() {
+  const qty      = parseFloat(dom.fQty.value);
+  const leverage = parseFloat(dom.fLeverage.value);
+  if (!isNaN(qty) && !isNaN(leverage) && leverage >= 1) {
+    dom.leverageNotional.textContent = '$' + (qty / leverage).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    dom.leverageNotionalGroup.hidden = false;
+  } else {
+    dom.leverageNotional.textContent = '—';
+    dom.leverageNotionalGroup.hidden = true;
+  }
+}
+
+/** Duration in minutes between two ISO strings. */
 function calcDurationMinutes(open, close) {
   if (!open || !close) return null;
   const ms = new Date(close) - new Date(open);
@@ -1050,130 +1191,81 @@ function calcDurationMinutes(open, close) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   ADD TRADE
+   ADD / UPDATE TRADE
    ════════════════════════════════════════════════════════════ */
 
-/**
- * POST a new trade to /trades.
- * @param {Object} tradeData
- */
-async function addTrade(tradeData) {
+async function saveTrade(id, tradeData) {
+  const editing = id != null;
   dom.submitBtn.disabled = true;
-  dom.submitBtn.textContent = t('modal.adding');
+  dom.submitBtn.textContent = t(editing ? 'modal.saving' : 'modal.adding');
   dom.formError.hidden = true;
-
   try {
-    await apiFetch('/trades', {
-      method: 'POST',
+    const saved = await apiFetch(editing ? `/trades/${id}` : '/trades', {
+      method: editing ? 'PUT' : 'POST',
       body: JSON.stringify(tradeData),
     });
     closeAddModal();
-    showToast(t('toast.trade.added'), 'success');
+    state.flashId = saved?.id ?? id;
+    showToast(t(editing ? 'toast.trade.updated' : 'toast.trade.added'), 'success');
     await refreshAll();
   } catch (err) {
-    dom.formError.textContent = `Error: ${err.message}`;
+    dom.formError.textContent = `${t('form.error')} ${err.message}`;
     dom.formError.hidden = false;
   } finally {
     dom.submitBtn.disabled = false;
-    dom.submitBtn.textContent = t('modal.submit.add');
+    dom.submitBtn.textContent = t(state.editingId != null ? 'modal.submit.edit' : 'modal.submit.add');
   }
 }
 
 /* ════════════════════════════════════════════════════════════
-   UPDATE TRADE
-   ════════════════════════════════════════════════════════════ */
-
-async function updateTrade(id, tradeData) {
-  dom.submitBtn.disabled = true;
-  dom.submitBtn.textContent = t('modal.saving');
-  dom.formError.hidden = true;
-
-  try {
-    await apiFetch(`/trades/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(tradeData),
-    });
-    closeAddModal();
-    showToast(t('toast.trade.updated'), 'success');
-    await refreshAll();
-  } catch (err) {
-    dom.formError.textContent = `Error: ${err.message}`;
-    dom.formError.hidden = false;
-  } finally {
-    dom.submitBtn.disabled = false;
-    dom.submitBtn.textContent = t('modal.submit.edit');
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
-   SELECTION HELPERS
+   SELECTION + DELETE
    ════════════════════════════════════════════════════════════ */
 
 function updateSelectionUI() {
   const count = state.selectedIds.size;
   dom.selectedCount.textContent = count;
   dom.bulkDeleteBtn.hidden = count === 0;
-  // Sync select-all checkbox state
-  const total = dom.tradesBody.querySelectorAll('input[type="checkbox"]').length;
+  const total = dom.tradesBody.querySelectorAll('input[data-select]').length;
   dom.selectAll.indeterminate = count > 0 && count < total;
   dom.selectAll.checked = total > 0 && count === total;
 }
 
-function clearSelection() {
-  state.selectedIds.clear();
-  dom.tradesBody.querySelectorAll('input[data-select]').forEach(cb => cb.checked = false);
-  updateSelectionUI();
+function openConfirmModal(ids) {
+  state.pendingDelete = { ids };
+  const many = ids.length > 1;
+  dom.confirmTitle.textContent = many ? `${t('confirm.title.many')} (${ids.length})` : t('confirm.title');
+  dom.confirmMsg.textContent = many ? `${ids.length} ${t('confirm.msg.many')}` : t('confirm.msg');
+  dom.confirmBackdrop.hidden = false;
+  dom.confirmDeleteBtn.focus();
+  document.body.style.overflow = 'hidden';
 }
 
-/* ════════════════════════════════════════════════════════════
-   BULK DELETE
-   ════════════════════════════════════════════════════════════ */
-
-async function bulkDeleteTrades() {
-  const ids = [...state.selectedIds];
-  if (!ids.length) return;
-  if (!confirm(`Delete ${ids.length} ${t('toast.bulk.confirm')}`)) return;
-
-  dom.bulkDeleteBtn.disabled = true;
-  try {
-    await apiFetch('/trades/bulk-delete', {
-      method: 'POST',
-      body: JSON.stringify({ ids }),
-    });
-    showToast(`${ids.length} ${t('toast.bulk.deleted')}`, 'success');
-    state.selectedIds.clear();
-    await refreshAll();
-  } catch (err) {
-    showToast(`${t('toast.bulk.fail')} ${err.message}`, 'error');
-  } finally {
-    dom.bulkDeleteBtn.disabled = false;
-  }
+function closeConfirmModal() {
+  dom.confirmBackdrop.hidden = true;
+  document.body.style.overflow = '';
+  state.pendingDelete = null;
 }
 
-/* ════════════════════════════════════════════════════════════
-   DELETE TRADE
-   ════════════════════════════════════════════════════════════ */
-
-/**
- * DELETE /trades/{id}.
- * @param {string|number} id
- */
-async function deleteTrade(id) {
+async function confirmDelete() {
+  const ids = state.pendingDelete?.ids;
+  if (!ids?.length) return;
   dom.confirmDeleteBtn.disabled = true;
   dom.confirmDeleteBtn.textContent = t('confirm.deleting');
-
   try {
-    await apiFetch(`/trades/${id}`, { method: 'DELETE' });
+    if (ids.length === 1) {
+      await apiFetch(`/trades/${ids[0]}`, { method: 'DELETE' });
+      showToast(t('toast.trade.deleted'), 'success');
+    } else {
+      await apiFetch('/trades/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+      showToast(`${ids.length} ${t('toast.bulk.deleted')}`, 'success');
+    }
     closeConfirmModal();
-    showToast(t('toast.trade.deleted'), 'success');
     await refreshAll();
   } catch (err) {
-    showToast(`${t('toast.delete.fail')} ${err.message}`, 'error');
-    console.error('deleteTrade:', err);
+    showToast(`${t(ids.length === 1 ? 'toast.delete.fail' : 'toast.bulk.fail')} ${err.message}`, 'error');
   } finally {
     dom.confirmDeleteBtn.disabled = false;
     dom.confirmDeleteBtn.textContent = t('confirm.delete');
-    state.pendingDeleteId = null;
   }
 }
 
@@ -1192,20 +1284,17 @@ async function _patchCSVQuantity(file) {
   const lines = raw.split(/\r?\n/);
   if (lines.length < 2) return file;
 
-  // Detect delimiter (try tab first, then others)
   const delims = ['\t', ',', ';', '|'];
   let delim = ',';
   for (const d of delims) {
     if (lines[0].includes(d)) { delim = d; break; }
   }
 
-  // Strip BOM from header line
-  const headerLine = lines[0].replace(/^\uFEFF/, '');
+  const headerLine = lines[0].replace(/^﻿/, '');
   const headers = headerLine.split(delim).map(h => h.trim().toLowerCase());
-  let qtyIdx = headers.findIndex(h => ['quantity','qty','size','amount','contracts','volume'].includes(h));
+  const qtyIdx = headers.findIndex(h => ['quantity', 'qty', 'size', 'amount', 'contracts', 'volume'].includes(h));
 
   if (qtyIdx === -1) {
-    // Column doesn't exist at all — append it to every row
     const out = lines.map((line, i) => {
       if (!line.trim()) return line;
       return line.trimEnd() + delim + (i === 0 ? 'quantity' : '0');
@@ -1213,7 +1302,6 @@ async function _patchCSVQuantity(file) {
     return new File([out.join('\n')], file.name, { type: 'text/csv' });
   }
 
-  // Column exists — replace any empty cells with '0'
   const out = lines.map((line, i) => {
     if (i === 0 || !line.trim()) return line;
     const cols = line.split(delim);
@@ -1223,13 +1311,18 @@ async function _patchCSVQuantity(file) {
   return new File([out.join('\n')], file.name, { type: 'text/csv' });
 }
 
+/** Swap a toolbar button's text while keeping its icon. */
+function setBtnText(btn, text) {
+  btn.querySelector('span').textContent = text;
+}
+
 async function importCSV(rawFile) {
   const file = await _patchCSVQuantity(rawFile);
   const formData = new FormData();
   formData.append('file', file);
 
   dom.importBtn.disabled = true;
-  dom.importBtn.textContent = t('modal.adding');
+  setBtnText(dom.importBtn, t('toolbar.importing'));
 
   try {
     const token = getToken();
@@ -1240,18 +1333,17 @@ async function importCSV(rawFile) {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Server error ${res.status}: ${text}`);
+      throw new Error(`${res.status}: ${text}`);
     }
     const result = await res.json();
     const hasErrors = result.errors && result.errors.length > 0;
-    let msg = `${t('toast.import.ok')} ${result.imported} trade(s).`;
-    if (result.skipped) msg += ` ${result.skipped} duplicate(s) skipped.`;
-    if (hasErrors) msg += ` ${result.errors.length} row(s) failed.`;
+    let msg = `${t('toast.import.ok')} ${result.imported} ${t('unit.trades')}.`;
+    if (result.skipped) msg += ` ${result.skipped} ${t('toast.import.skipped')}`;
+    if (hasErrors) msg += ` ${result.errors.length} ${t('toast.import.rowsfailed')}`;
     showToast(msg, hasErrors ? 'info' : 'success', 8000);
     if (hasErrors) {
       console.warn('Import row errors:\n' + result.errors.join('\n'));
-      // Show first 3 errors in a second toast so user sees what went wrong
-      const preview = result.errors.slice(0, 3).join('\n') + (result.errors.length > 3 ? `\n…and ${result.errors.length - 3} more` : '');
+      const preview = result.errors.slice(0, 3).join('\n') + (result.errors.length > 3 ? `\n… +${result.errors.length - 3}` : '');
       showToast(preview, 'error', 12000);
     }
     await refreshAll();
@@ -1260,169 +1352,236 @@ async function importCSV(rawFile) {
     console.error('Import error:', err);
   } finally {
     dom.importBtn.disabled = false;
-    dom.importBtn.textContent = t('toolbar.import');
+    setBtnText(dom.importBtn, t('toolbar.import'));
     dom.csvFileInput.value = '';
   }
 }
 
-/* ════════════════════════════════════════════════════════════
-   SYNC EXCHANGE
-   ════════════════════════════════════════════════════════════ */
-
-/**
- * POST /sync — pulls latest trades from the connected exchange.
- */
-async function syncExchange() {
-  dom.syncBtn.disabled = true;
-  dom.syncBtn.classList.add('syncing');
-
+async function exportCSV() {
+  dom.exportBtn.disabled = true;
+  setBtnText(dom.exportBtn, t('toolbar.exporting'));
   try {
-    const result = await apiFetch('/sync', { method: 'POST' });
-    const count = result?.new_trades ?? result?.count ?? result?.synced ?? '?';
-    showToast(`Sync complete. ${count} new trade(s) imported.`, 'success', 5000);
-    await refreshAll();
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/export${buildQuery(getDateRange())}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    downloadBlob(await res.blob(), `trades_export_${isoDay(new Date())}.csv`);
   } catch (err) {
-    showToast(`Sync failed: ${err.message}`, 'error');
-    console.error('syncExchange:', err);
+    showToast(`${t('toast.export.fail')} ${err.message}`, 'error', 6000);
   } finally {
-    dom.syncBtn.disabled = false;
-    dom.syncBtn.classList.remove('syncing');
+    dom.exportBtn.disabled = false;
+    setBtnText(dom.exportBtn, t('toolbar.export'));
   }
 }
 
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function downloadTemplate() {
+  const headers = 'symbol,side,entry_price,exit_price,quantity,pnl,roe,leverage,risk_reward,entries,open_time,close_time,notes';
+  const example = 'BTC/USDT,long,60000,62000,0.1,200,3.33,10,2.0,1,2024-01-01T10:00:00,2024-01-01T12:00:00,Example trade';
+  downloadBlob(new Blob([headers + '\n' + example], { type: 'text/csv' }), 'trades_template.csv');
+}
+
 /* ════════════════════════════════════════════════════════════
-   CHART
+   CHART — equity curve, daily P&L bars, drawdown (underwater)
    ════════════════════════════════════════════════════════════ */
 
-/**
- * Build and render a cumulative P&L line chart using Chart.js.
- * @param {Array} trades
- */
+/** Theme colours for canvas charts, read from the CSS variables. */
+function chartPalette() {
+  return {
+    up:      cssVar('--green'),
+    down:    cssVar('--red'),
+    accent:  cssVar('--accent-primary'),
+    text:    cssVar('--text-secondary'),
+    muted:   cssVar('--text-muted'),
+    grid:    cssVar('--chart-grid') || cssVar('--border-subtle'),
+    tipBg:   cssVar('--bg-elevated'),
+    tipText: cssVar('--text-primary'),
+    border:  cssVar('--border-default'),
+    font:    cssVar('--font-mono'),
+  };
+}
+
+/** Vertical crosshair under the hovered point. */
+const crosshairPlugin = {
+  id: 'ttCrosshair',
+  afterDatasetsDraw(chart) {
+    const active = chart.tooltip?.getActiveElements?.() || [];
+    if (!active.length) return;
+    const { ctx, chartArea } = chart;
+    const x = active[0].element.x;
+    ctx.save();
+    ctx.strokeStyle = chart.options.plugins.ttCrosshair.color;
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, chartArea.top);
+    ctx.lineTo(x, chartArea.bottom);
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
+/** Series for the active chart mode. Every point keeps the trades behind it. */
+function chartSeries(trades, mode) {
+  const sorted = trades
+    .filter(x => x.close_time || x.open_time)
+    .sort((a, b) => tradeTime(a) - tradeTime(b));
+  const loc = uiLocale();
+  const dayLabel = (d) => d.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
+
+  if (mode === 'daily') {
+    const days = new Map();
+    for (const tr of sorted) {
+      const key = isoDay(tradeTime(tr));
+      if (!days.has(key)) days.set(key, { pnl: 0, ids: [] });
+      const d = days.get(key);
+      d.pnl += Number(tr.pnl ?? 0);
+      d.ids.push(tr.id);
+    }
+    const keys = [...days.keys()];
+    return {
+      labels: keys.map(k => dayLabel(parseDay(k))),
+      values: keys.map(k => +days.get(k).pnl.toFixed(2)),
+      ids:    keys.map(k => days.get(k).ids),
+    };
+  }
+
+  let cum = 0;
+  let peak = 0;
+  const labels = [], values = [], ids = [], pnls = [];
+  for (const tr of sorted) {
+    const p = Number(tr.pnl ?? 0);
+    cum += p;
+    peak = Math.max(peak, cum);
+    labels.push(dayLabel(tradeTime(tr)));
+    values.push(+(mode === 'drawdown' ? cum - peak : cum).toFixed(2));
+    ids.push([tr.id]);
+    pnls.push(p);
+  }
+  return { labels, values, ids, pnls };
+}
+
 function renderChart(trades) {
   const canvas = dom.pnlChart;
-
-  // Destroy previous chart instance
   if (state.pnlChart) {
     state.pnlChart.destroy();
     state.pnlChart = null;
   }
-
-  if (!trades || !trades.length) {
-    dom.chartEmpty.style.display = 'flex';
-    canvas.style.display = 'none';
+  if (!trades.length || typeof Chart === 'undefined') {
+    dom.chartEmpty.hidden = false;
+    canvas.hidden = true;
     return;
   }
+  dom.chartEmpty.hidden = true;
+  canvas.hidden = false;
 
-  dom.chartEmpty.style.display = 'none';
-  canvas.style.display = 'block';
+  const mode = state.chartMode;
+  const pal = chartPalette();
+  const { labels, values, ids, pnls } = chartSeries(trades, mode);
+  const last = values[values.length - 1] ?? 0;
+  const ctx = canvas.getContext('2d');
+  const h = canvas.parentElement.clientHeight || 300;
+  const money = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const axisMoney = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
-  // Theme-aware chart colours
-  const _chartTheme = document.documentElement.getAttribute('data-theme');
-  const _chartColors = _chartTheme === 'purple'
-    ? { win: '#00e5ff', winRgb: '0, 229, 255', loss: '#c030ff', lossRgb: '192, 48, 255' }
-    : { win: '#00c853', winRgb: '0, 200, 83',  loss: '#ff1744', lossRgb: '255, 23, 68'  };
-
-  // Sort by close_time asc, build cumulative P&L
-  const sorted = [...trades]
-    .filter(t => t.close_time || t.open_time)
-    .sort((a, b) => new Date(a.close_time ?? a.open_time) - new Date(b.close_time ?? b.open_time));
-
-  let cumulative = 0;
-  const labels = [];
-  const values = [];
-  const pointColors = [];
-
-  for (const trade of sorted) {
-    const pnl = parseFloat(trade.pnl ?? trade.profit_loss ?? 0);
-    cumulative += pnl;
-    const dateStr = trade.close_time ?? trade.open_time;
-    const d = new Date(dateStr);
-    labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-    values.push(parseFloat(cumulative.toFixed(2)));
-    pointColors.push(pnl >= 0 ? _chartColors.win : _chartColors.loss);
+  let dataset;
+  if (mode === 'daily') {
+    dataset = {
+      type: 'bar',
+      data: values,
+      backgroundColor: values.map(v => withAlpha(v >= 0 ? pal.up : pal.down, 0.75)),
+      hoverBackgroundColor: values.map(v => (v >= 0 ? pal.up : pal.down)),
+      borderRadius: 4,
+      maxBarThickness: 28,
+    };
+  } else {
+    const base = mode === 'drawdown' ? pal.down : (last >= 0 ? pal.up : pal.down);
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    if (mode === 'drawdown') {
+      grad.addColorStop(0, withAlpha(base, 0.02));
+      grad.addColorStop(1, withAlpha(base, 0.35));
+    } else {
+      grad.addColorStop(0, withAlpha(base, 0.32));
+      grad.addColorStop(0.65, withAlpha(base, 0.06));
+      grad.addColorStop(1, withAlpha(base, 0));
+    }
+    const many = values.length > 80;
+    dataset = {
+      type: 'line',
+      data: values,
+      borderColor: base,
+      borderWidth: 2.2,
+      backgroundColor: grad,
+      fill: mode === 'drawdown' ? 'origin' : 'start',
+      tension: 0.32,
+      pointBackgroundColor: mode === 'equity' ? pnls.map(p => (p >= 0 ? pal.up : pal.down)) : base,
+      pointBorderColor: 'transparent',
+      pointRadius: values.map((_, i) => (i === values.length - 1 ? 5 : many ? 0 : 2.5)),
+      pointHoverRadius: 6,
+      pointHoverBorderWidth: 2,
+      pointHoverBorderColor: pal.tipBg,
+    };
   }
 
-  // Gradient fill
-  const ctx = canvas.getContext('2d');
-  const gradient = ctx.createLinearGradient(0, 0, 0, 260);
-  const finalValue = values[values.length - 1] ?? 0;
-  const baseColor = finalValue >= 0 ? _chartColors.winRgb : _chartColors.lossRgb;
-  gradient.addColorStop(0,   `rgba(${baseColor}, 0.25)`);
-  gradient.addColorStop(0.6, `rgba(${baseColor}, 0.05)`);
-  gradient.addColorStop(1,   `rgba(${baseColor}, 0.00)`);
-
-  const lineColor = finalValue >= 0 ? _chartColors.win : _chartColors.loss;
-
   state.pnlChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Cumulative P&L',
-        data: values,
-        borderColor: lineColor,
-        borderWidth: 2,
-        backgroundColor: gradient,
-        fill: true,
-        tension: 0.3,
-        pointBackgroundColor: pointColors,
-        pointBorderColor: 'transparent',
-        pointRadius: values.length > 100 ? 2 : 4,
-        pointHoverRadius: 7,
-      }],
-    },
+    data: { labels, datasets: [dataset] },
+    plugins: [crosshairPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: REDUCED_MOTION ? false : { duration: 900, easing: 'easeOutQuart' },
       interaction: { mode: 'index', intersect: false },
-      onClick(evt, elements) {
-        if (!elements.length) return;
-        const trade = sorted[elements[0].index];
-        if (!trade) return;
-        const row = document.querySelector(`.trades-table tr[data-id="${trade.id}"]`);
-        if (!row) return;
-        document.querySelectorAll('.trades-table tr.trade-highlight').forEach(r => r.classList.remove('trade-highlight'));
-        row.classList.add('trade-highlight');
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      onHover(evt, els) { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick(evt, els) {
+        if (els.length) focusTrades(ids[els[0].index] || []);
       },
       plugins: {
         legend: { display: false },
+        ttCrosshair: { color: withAlpha(pal.text, 0.45) },
         tooltip: {
-          backgroundColor: '#1c2330',
-          borderColor: '#30363d',
+          backgroundColor: withAlpha(pal.tipBg, 0.96),
+          borderColor: pal.border,
           borderWidth: 1,
-          titleColor: '#e6edf3',
-          bodyColor: '#8b949e',
+          titleColor: pal.text,
+          bodyColor: pal.tipText,
+          titleFont: { family: pal.font, size: 11 },
+          bodyFont: { family: pal.font, size: 13, weight: '700' },
           padding: 10,
+          cornerRadius: 10,
+          displayColors: false,
           callbacks: {
-            label(ctx) {
-              const val = ctx.parsed.y;
-              const sign = val >= 0 ? '+' : '−';
-              return ` ${sign}$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            label(c) {
+              const v = c.parsed.y;
+              if (mode === 'equity') {
+                const p = pnls[c.dataIndex];
+                return [`${t('chart.cum')} ${money(v)}`, `${t('chart.trade')} ${money(p)}`];
+              }
+              if (mode === 'daily') return `${money(v)} · ${ids[c.dataIndex].length} ${t(ids[c.dataIndex].length === 1 ? 'unit.trade' : 'unit.trades')}`;
+              return `${t('chart.belowpeak')} ${money(v)}`;
             },
           },
         },
       },
       scales: {
         x: {
-          ticks: {
-            color: '#484f58',
-            font: { size: 11 },
-            maxTicksLimit: 10,
-            maxRotation: 0,
-          },
-          grid: { color: '#21262d', drawBorder: false },
+          ticks: { color: pal.muted, font: { family: pal.font, size: 10 }, maxTicksLimit: 8, maxRotation: 0, autoSkip: true },
+          grid: { display: false },
+          border: { display: false },
         },
         y: {
-          ticks: {
-            color: '#484f58',
-            font: { size: 11 },
-            callback(val) {
-              const sign = val >= 0 ? '+' : '−';
-              return `${sign}$${Math.abs(val).toLocaleString()}`;
-            },
-          },
-          grid: { color: '#21262d', drawBorder: false },
+          ticks: { color: pal.muted, font: { family: pal.font, size: 10 }, callback: axisMoney, maxTicksLimit: 6 },
+          grid: { color: pal.grid },
+          border: { display: false },
         },
       },
     },
@@ -1433,6 +1592,11 @@ function renderChart(trades) {
    MODAL HELPERS
    ════════════════════════════════════════════════════════════ */
 
+/** ISO string → value for <input type="datetime-local"> (wall-clock, minutes). */
+function toLocalInput(iso) {
+  return iso ? String(iso).replace(' ', 'T').slice(0, 16) : '';
+}
+
 function openAddModal() {
   state.editingId = null;
   dom.tradeForm.reset();
@@ -1440,15 +1604,15 @@ function openAddModal() {
   dom.modalBackdrop.querySelector('.modal-title').textContent = t('modal.addtrade');
   dom.submitBtn.textContent = t('modal.submit.add');
   dom.submitBtn.disabled = false;
+  dom.qtyConversion.hidden = true;
+  dom.leverageNotionalGroup.hidden = true;
   dom.modalBackdrop.hidden = false;
-  dom.qtyConversion.style.display = 'none';
-  dom.qtyUnit.textContent = 'USDT';
   dom.fSymbol.focus();
   document.body.style.overflow = 'hidden';
 }
 
 function openEditModal(id) {
-  const trade = state.trades.find(t => String(t.id) === String(id));
+  const trade = state.trades.find(x => String(x.id) === String(id));
   if (!trade) return;
   state.editingId = id;
 
@@ -1469,21 +1633,16 @@ function openEditModal(id) {
   dom.fEntries.value  = trade.entries ?? '';
   dom.fNotes.value    = trade.notes ?? '';
 
-  // Qty: reverse-convert for long (backend stores coin units)
+  // The form takes USDT and the backend stores coins (qty / entry on save, for
+  // either side), so the reverse is coins x entry for either side too.
   const entry = parseFloat(trade.entry_price);
-  const side  = (trade.side ?? '').toLowerCase();
-  if (side === 'long' && entry > 0) {
-    dom.fQty.value = (trade.quantity * entry).toFixed(2);
-  } else {
-    dom.fQty.value = trade.quantity ?? '';
-  }
+  dom.fQty.value = entry > 0 && trade.quantity != null ? +(trade.quantity * entry).toFixed(2) : (trade.quantity ?? '');
 
-  // Times
-  const toLocal = (iso) => iso ? iso.replace('T', 'T').slice(0, 16) : '';
-  dom.fOpenTime.value  = toLocal(trade.open_time);
-  dom.fCloseTime.value = toLocal(trade.close_time);
+  dom.fOpenTime.value  = toLocalInput(trade.open_time);
+  dom.fCloseTime.value = toLocalInput(trade.close_time);
 
   updateQtyConversion();
+  updateNotional();
   dom.modalBackdrop.hidden = false;
   dom.fSymbol.focus();
   document.body.style.overflow = 'hidden';
@@ -1493,19 +1652,6 @@ function closeAddModal() {
   state.editingId = null;
   dom.modalBackdrop.hidden = true;
   document.body.style.overflow = '';
-}
-
-function openConfirmModal(id) {
-  state.pendingDeleteId = id;
-  dom.confirmBackdrop.hidden = false;
-  dom.confirmDeleteBtn.focus();
-  document.body.style.overflow = 'hidden';
-}
-
-function closeConfirmModal() {
-  dom.confirmBackdrop.hidden = true;
-  document.body.style.overflow = '';
-  state.pendingDeleteId = null;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1521,9 +1667,7 @@ function handleFormSubmit(e) {
   const entryRaw    = parseFloat(dom.fEntry.value);
   const exitRaw     = parseFloat(dom.fExit.value);
   const qtyUsdt     = parseFloat(dom.fQty.value);
-  const qtyRaw      = (!isNaN(entryRaw) && entryRaw > 0)
-    ? qtyUsdt / entryRaw
-    : qtyUsdt;
+  const qtyRaw      = (!isNaN(entryRaw) && entryRaw > 0) ? qtyUsdt / entryRaw : qtyUsdt;
   const pnlRaw      = parseFloat(dom.fPnl.value);
   const roeRaw      = parseFloat(dom.fRoe.value);
   const leverageRaw = dom.fLeverage.value ? parseFloat(dom.fLeverage.value) : null;
@@ -1533,21 +1677,17 @@ function handleFormSubmit(e) {
   const closeTime   = dom.fCloseTime.value;
   const notes       = dom.fNotes.value.trim() || null;
 
-  // Client-side validation
   const errors = [];
-  if (!symbol)           errors.push('Symbol is required.');
-  if (!side)             errors.push('Side is required.');
-  if (isNaN(entryRaw))   errors.push('Entry price must be a number.');
-  if (isNaN(exitRaw))    errors.push('Exit price must be a number.');
-  if (isNaN(qtyRaw))     errors.push('Quantity must be a number.');
-  if (qtyRaw <= 0)       errors.push('Quantity must be greater than zero.');
-  if (isNaN(pnlRaw))     errors.push('P&L is required.');
-  if (isNaN(roeRaw))     errors.push('ROE % is required.');
-  if (!openTime)         errors.push('Open time is required.');
-  if (!closeTime)        errors.push('Close time is required.');
-  if (openTime && closeTime && new Date(closeTime) <= new Date(openTime)) {
-    errors.push('Close time must be after open time.');
-  }
+  if (!symbol)           errors.push(t('form.err.symbol'));
+  if (!side)             errors.push(t('form.err.side'));
+  if (isNaN(entryRaw))   errors.push(t('form.err.entry'));
+  if (isNaN(exitRaw))    errors.push(t('form.err.exit'));
+  if (isNaN(qtyRaw) || qtyRaw <= 0) errors.push(t('form.err.qty'));
+  if (isNaN(pnlRaw))     errors.push(t('form.err.pnl'));
+  if (isNaN(roeRaw))     errors.push(t('form.err.roe'));
+  if (!openTime)         errors.push(t('form.err.open'));
+  if (!closeTime)        errors.push(t('form.err.close'));
+  if (openTime && closeTime && closeTime <= openTime) errors.push(t('form.err.order'));
 
   if (errors.length) {
     dom.formError.textContent = errors.join(' ');
@@ -1555,7 +1695,9 @@ function handleFormSubmit(e) {
     return;
   }
 
-  const tradeData = {
+  // Times are sent as the wall-clock the form shows (no UTC shift), the same
+  // way the table reads them back — so editing a trade never moves its times.
+  saveTrade(state.editingId, {
     symbol,
     side,
     entry_price: entryRaw,
@@ -1566,57 +1708,11 @@ function handleFormSubmit(e) {
     leverage:    leverageRaw,
     risk_reward: rrRaw,
     entries:     entriesRaw,
-    open_time:   new Date(openTime).toISOString(),
-    close_time:  new Date(closeTime).toISOString(),
+    open_time:   `${openTime}:00`,
+    close_time:  `${closeTime}:00`,
     notes,
     source:      'manual',
-  };
-
-  if (state.editingId != null) {
-    updateTrade(state.editingId, tradeData);
-  } else {
-    addTrade(tradeData);
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
-   DELEGATION: TABLE ACTION BUTTONS
-   ════════════════════════════════════════════════════════════ */
-function handleTableClick(e) {
-  const btn = e.target.closest('[data-action]');
-  if (!btn) return;
-
-  const { action, id } = btn.dataset;
-
-  if (action === 'delete') {
-    openConfirmModal(id);
-  }
-  if (action === 'edit') {
-    openEditModal(id);
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
-   KEYBOARD TRAP FOR MODALS
-   ════════════════════════════════════════════════════════════ */
-function handleKeydown(e) {
-  if (e.key === 'Escape') {
-    if (!dom.confirmBackdrop.hidden) closeConfirmModal();
-    else if (!dom.modalBackdrop.hidden) closeAddModal();
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
-   REFRESH ALL DATA
-   ════════════════════════════════════════════════════════════ */
-async function refreshAll() {
-  const { start_date, end_date } = getDateRange();
-  await Promise.all([
-    fetchMetrics(start_date, end_date),
-    fetchTrades(start_date, end_date),
-    // Fund Pool registers this after its IIFE runs (see initPool)
-    window.refreshPool ? window.refreshPool() : Promise.resolve(),
-  ]);
+  });
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1628,13 +1724,17 @@ function showLoginScreen() {
   document.getElementById('userInfo').hidden = true;
   const loginBtn = document.getElementById('loginBtn');
   loginBtn.disabled = false;
-  loginBtn.textContent = 'Sign In';
+  loginBtn.textContent = t('login.submit');
+  loginCanvas?.start();
 }
 
 function showApp(user) {
   document.getElementById('loginScreen').hidden = true;
+  loginCanvas?.stop();
   document.getElementById('userInfo').hidden = false;
   document.getElementById('userNameDisplay').textContent = user.username;
+  document.getElementById('userAvatar').textContent = (user.username || '?').charAt(0).toUpperCase();
+  setConnectionStatus('', t('header.connecting'));
   document.dispatchEvent(new CustomEvent('illustrade:login'));
 }
 
@@ -1648,8 +1748,7 @@ async function doLogin(username, password) {
   const RETRY_DELAY  = 6000; // ms between retries while server wakes up
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    loginBtn.textContent = attempt === 0 ? 'Signing in…' : `Server starting up… (${attempt}/${MAX_RETRIES})`;
-
+    loginBtn.textContent = attempt === 0 ? t('login.signingin') : `${t('login.waking')} (${attempt}/${MAX_RETRIES})`;
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
@@ -1658,41 +1757,44 @@ async function doLogin(username, password) {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j.detail || 'Login failed.');
+        throw new Error(j.detail || t('login.failed'));
       }
       const data = await res.json();
       saveAuth(data.access_token, data.user);
+      document.getElementById('loginPassword').value = '';
       showApp(data.user);
-      setDefaultDateRange();
-      bindEvents();
-      setConnectionStatus('', 'Connecting…');
       await refreshAll();
-      return; // success — exit loop
+      return;
     } catch (err) {
-      // TypeError means a network/CORS failure (server sleeping or not yet up)
-      // Retry those; surface real HTTP errors (wrong password, etc.) immediately
+      // TypeError means a network/CORS failure (server sleeping or not yet up).
+      // Retry those; surface real HTTP errors (wrong password, etc.) immediately.
       if (err instanceof TypeError && attempt < MAX_RETRIES) {
         await new Promise(r => setTimeout(r, RETRY_DELAY));
         continue;
       }
-      loginError.textContent = (attempt >= MAX_RETRIES)
-        ? 'Server is taking too long to respond. Please try again in a moment.'
-        : err.message;
+      loginError.textContent = attempt >= MAX_RETRIES ? t('login.timeout') : err.message;
       loginError.hidden = false;
       break;
     }
   }
 
   loginBtn.disabled = false;
-  loginBtn.textContent = 'Sign In';
+  loginBtn.textContent = t('login.submit');
 }
 
 function doLogout() {
   clearAuth();
-  // Reset any state that was loaded for the previous user
+  _loadSeq++;   // drop any load still in flight for the previous user
+  state.loaded = false;
   state.trades = [];
+  state.metrics = null;
   state.selectedIds.clear();
-  state.tableFilter = { symbols: new Set(), side: '' };
+  state.tableFilter = { symbols: new Set(), side: '', search: '' };
+  dom.tfSearch.value = '';
+  syncSideSeg();
+  closeUserMenu();
+  populateSymbolList();
+  renderAll();
   document.dispatchEvent(new CustomEvent('illustrade:logout'));
   showLoginScreen();
 }
@@ -1716,139 +1818,142 @@ function togglePanel(panelEl, btnEl) {
 }
 
 function closePanel(panelEl, btnEl) {
-  if (!panelEl) return;
   panelEl.hidden = true;
-  btnEl?.classList.remove('is-open');
+  btnEl.classList.remove('is-open');
 }
 
-function clearActivePreset() {
-  document.querySelectorAll('.tf-quick-btn, .quick-range-btn').forEach(b => b.classList.remove('is-active'));
-}
-
-/**
- * Apply a rolling N-day range (today minus `days` through today) to both the
- * toolbar date inputs and the table-filter panel inputs, then refresh.
- * Shared by the toolbar quick-range buttons and the table filter's preset list.
- */
-function applyQuickRange(days, label) {
-  const today = new Date();
-  const from  = new Date();
-  from.setDate(from.getDate() - days);
-  const todayStr = today.toISOString().slice(0, 10);
-  const fromStr  = from.toISOString().slice(0, 10);
-
-  dom.startDate.value   = fromStr;
-  dom.endDate.value     = todayStr;
-  dom.tfStartDate.value = fromStr;
-  dom.tfEndDate.value   = todayStr;
-  dom.tfDateLabel.textContent = label;
-
-  clearActivePreset();
-  document.querySelectorAll(`.tf-quick-btn[data-days="${days}"], .quick-range-btn[data-days="${days}"]`)
-    .forEach(b => b.classList.add('is-active'));
-
-  refreshAll();
-}
-
-function populateSymbolList(trades) {
-  const unique = [...new Set(
-    trades.map(t => (t.symbol || '').toUpperCase()).filter(Boolean)
-  )].sort();
-
-  dom.tfSymbolList.innerHTML = unique.map(sym => `
-    <label class="tf-symbol-item" data-sym="${escHtml(sym)}">
-      <input type="checkbox" data-sym="${escHtml(sym)}" />
-      ${escHtml(sym)}
-    </label>
-  `).join('');
-
-  // Re-check any previously selected symbols
-  if (state.tableFilter.symbols.size > 0) {
-    dom.tfSymbolList.querySelectorAll('input[data-sym]').forEach(cb => {
-      cb.checked = state.tableFilter.symbols.has(cb.dataset.sym);
-    });
+function populateSymbolList() {
+  const counts = new Map();
+  for (const tr of state.trades) {
+    const sym = (tr.symbol || '').toUpperCase();
+    if (sym) counts.set(sym, (counts.get(sym) || 0) + 1);
   }
+  // Drop selections for symbols that are no longer in the period
+  for (const sym of [...state.tableFilter.symbols]) if (!counts.has(sym)) state.tableFilter.symbols.delete(sym);
+
+  dom.tfSymbolList.innerHTML = [...counts.keys()].sort().map(sym => `
+    <label class="tf-symbol-item" data-sym="${escHtml(sym)}">
+      <input type="checkbox" data-sym="${escHtml(sym)}" ${state.tableFilter.symbols.has(sym) ? 'checked' : ''} />
+      ${symbolHtml(sym)}<span class="tf-symbol-count">${counts.get(sym)}</span>
+    </label>`).join('') || `<div class="tf-symbol-empty">${escHtml(t('table.empty.short'))}</div>`;
   updateSymbolLabel();
 }
 
 function updateSymbolLabel() {
   const { symbols } = state.tableFilter;
-  if (symbols.size === 0) {
-    dom.tfSymbolLabel.textContent = t('filter.allsymbols');
-  } else if (symbols.size === 1) {
-    dom.tfSymbolLabel.textContent = [...symbols][0];
-  } else {
-    dom.tfSymbolLabel.textContent = `${symbols.size} Symbols`;
-  }
+  dom.tfSymbolLabel.textContent = symbols.size === 0 ? t('filter.allsymbols')
+    : symbols.size === 1 ? [...symbols][0]
+    : `${symbols.size} ${t('filter.symbols')}`;
+  dom.tfSymbolBtn.classList.toggle('is-filtered', symbols.size > 0);
+}
+
+/** Add or remove one symbol from the table filter (also used by the leaderboard). */
+function toggleSymbolFilter(sym) {
+  const s = state.tableFilter.symbols;
+  if (s.has(sym)) s.delete(sym); else s.add(sym);
+  dom.tfSymbolList.querySelectorAll('input[data-sym]').forEach(cb => { cb.checked = s.has(cb.dataset.sym); });
+  updateSymbolLabel();
+  renderFiltered();
+}
+
+function clearTableFilters() {
+  state.tableFilter.symbols.clear();
+  state.tableFilter.side = '';
+  state.tableFilter.search = '';
+  dom.tfSearch.value = '';
+  dom.tfSymbolList.querySelectorAll('input[data-sym]').forEach(cb => { cb.checked = false; });
+  syncSideSeg();
+  updateSymbolLabel();
+  renderFiltered();
+}
+
+function syncSideSeg() {
+  dom.sideSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('is-active', b.dataset.side === state.tableFilter.side));
+}
+
+/** Chip on the chart telling that table filters shape what it shows. */
+function updateFilterChip() {
+  const { symbols, side, search } = state.tableFilter;
+  const parts = [];
+  if (symbols.size) parts.push(symbols.size === 1 ? [...symbols][0] : `${symbols.size} ${t('filter.symbols')}`);
+  if (side) parts.push(t(side === 'long' ? 'filter.long' : 'filter.short'));
+  if (search.trim()) parts.push(`“${search.trim()}”`);
+  dom.chartFilterChip.hidden = !parts.length;
+  dom.chartFilterChip.innerHTML = parts.length
+    ? `${escHtml(t('chart.filtered'))}: <b>${escHtml(parts.join(' · '))}</b><svg class="ico ico-sm"><use href="#i-close"/></svg>`
+    : '';
+  dom.chartFilterChip.title = t('chart.clearfilters');
+}
+
+/* ── Header user menu ─────────────────────────────────────── */
+function closeUserMenu() {
+  dom.userMenu.hidden = true;
+  dom.userMenuBtn.setAttribute('aria-expanded', 'false');
 }
 
 /* ════════════════════════════════════════════════════════════
-   EVENT LISTENERS
+   EVENT LISTENERS — bound exactly once, at page load
    ════════════════════════════════════════════════════════════ */
+
+/** True while the user is typing somewhere (keyboard shortcuts stay off). */
+function isTyping(e) {
+  const el = e.target;
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+}
+
+function anyModalOpen() {
+  return [...document.querySelectorAll('.modal-backdrop')].some(m => !m.hidden)
+    || document.querySelector('.calc-open, .mc-screen.mc-open') != null;
+}
+
+function handleKeydown(e) {
+  if (e.key === 'Escape') {
+    if (!dom.confirmBackdrop.hidden) closeConfirmModal();
+    else if (!dom.modalBackdrop.hidden) closeAddModal();
+    closePanel(dom.tfDatePanel, dom.tfDateBtn);
+    closePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
+    closeUserMenu();
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e) || anyModalOpen() || !getToken()) return;
+  if (e.key === 'n' || e.key === 'N') { e.preventDefault(); openAddModal(); }
+  if (e.key === '/') { e.preventDefault(); dom.tfSearch.focus(); }
+}
+
 function bindEvents() {
-  // Logout
-  document.getElementById('logoutBtn')?.addEventListener('click', doLogout);
-
-  // Toolbar (legacy date inputs)
-  dom.applyFilter.addEventListener('click', () => {
-    // Sync toolbar dates to panel inputs so getDateRange() picks them up
-    dom.tfStartDate.value = dom.startDate.value;
-    dom.tfEndDate.value   = dom.endDate.value;
-    dom.tfDateLabel.textContent = dom.startDate.value && dom.endDate.value
-      ? `${dom.startDate.value} → ${dom.endDate.value}` : 'All time';
-    refreshAll();
+  // Header user menu
+  dom.userMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = dom.userMenu.hidden;
+    dom.userMenu.hidden = !open;
+    dom.userMenuBtn.setAttribute('aria-expanded', String(open));
   });
-  dom.clearFilter.addEventListener('click', () => {
-    dom.startDate.value = '';
-    dom.endDate.value   = '';
-    dom.tfStartDate.value = '';
-    dom.tfEndDate.value   = '';
-    dom.tfDateLabel.textContent = 'All time';
-    clearActivePreset();
-    refreshAll();
+  dom.userMenu.addEventListener('click', (e) => { if (e.target.closest('.user-menu-item')) closeUserMenu(); });
+  document.getElementById('logoutBtn').addEventListener('click', doLogout);
+
+  // Period presets
+  dom.periodSeg.querySelectorAll('.period-btn[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => setPeriod(btn.dataset.preset));
   });
-  dom.startDate.addEventListener('keydown', (e) => e.key === 'Enter' && refreshAll());
-  dom.endDate.addEventListener(  'keydown', (e) => e.key === 'Enter' && refreshAll());
 
-  // Add Trade button
-  dom.addTradeBtn.addEventListener('click', openAddModal);
-
-  // ── Table filter: date dropdown ──────────────────────────────
+  // Custom range panel
   dom.tfDateBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     togglePanel(dom.tfDatePanel, dom.tfDateBtn);
     if (!dom.tfDatePanel.hidden) closePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
   });
-
   dom.tfApplyDate.addEventListener('click', () => {
-    const start = dom.tfStartDate.value;
-    const end   = dom.tfEndDate.value;
-    dom.startDate.value = start;
-    dom.endDate.value   = end;
-    dom.tfDateLabel.textContent = start && end
-      ? `${start} → ${end}` : start ? `From ${start}` : end ? `Until ${end}` : 'All time';
-    clearActivePreset();
+    let start = dom.tfStartDate.value || null;
+    let end   = dom.tfEndDate.value   || null;
+    if (start && end && start > end) [start, end] = [end, start];
     closePanel(dom.tfDatePanel, dom.tfDateBtn);
-    refreshAll();
+    if (!start && !end) setPeriod('all');
+    else setPeriod('custom', start, end);
   });
 
-  document.querySelectorAll('.tf-quick-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const days = parseInt(btn.dataset.days, 10);
-      applyQuickRange(days, btn.textContent.trim());
-      closePanel(dom.tfDatePanel, dom.tfDateBtn);
-    });
-  });
+  dom.addTradeBtn.addEventListener('click', openAddModal);
 
-  // ── Toolbar: quick range buttons (7/30/90 days) ──────────────
-  document.querySelectorAll('.toolbar .quick-range-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const days = parseInt(btn.dataset.days, 10);
-      applyQuickRange(days, btn.textContent.trim());
-    });
-  });
-
-  // ── Table filter: symbol dropdown ────────────────────────────
+  // Symbol dropdown
   dom.tfSymbolBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     togglePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
@@ -1857,145 +1962,86 @@ function bindEvents() {
       dom.tfSymbolSearch.focus();
     }
   });
-
   dom.tfSymbolSearch.addEventListener('input', () => {
     const q = dom.tfSymbolSearch.value.trim().toLowerCase();
     dom.tfSymbolList.querySelectorAll('.tf-symbol-item').forEach(item => {
-      const sym = item.dataset.sym || '';
-      item.style.display = sym.toLowerCase().includes(q) ? '' : 'none';
+      item.hidden = !(item.dataset.sym || '').toLowerCase().includes(q);
     });
   });
-
   dom.tfSymbolList.addEventListener('change', (e) => {
     const cb = e.target.closest('input[data-sym]');
-    if (!cb) return;
-    const sym = cb.dataset.sym;
-    if (cb.checked) state.tableFilter.symbols.add(sym);
-    else state.tableFilter.symbols.delete(sym);
-    updateSymbolLabel();
-    renderTradesTable(state.trades);
-    renderChart(applyTableFilters(state.trades));
+    if (cb) toggleSymbolFilter(cb.dataset.sym);
   });
-
-  dom.tfSymbolSelectAll.addEventListener('click', () => {
-    state.tableFilter.symbols.clear();
-    dom.tfSymbolList.querySelectorAll('input[data-sym]').forEach(cb => { cb.checked = false; });
-    updateSymbolLabel();
-    renderTradesTable(state.trades);
-    renderChart(applyTableFilters(state.trades));
-  });
-
   dom.tfSymbolClear.addEventListener('click', () => {
     state.tableFilter.symbols.clear();
     dom.tfSymbolList.querySelectorAll('input[data-sym]').forEach(cb => { cb.checked = false; });
     updateSymbolLabel();
-    renderTradesTable(state.trades);
-    renderChart(applyTableFilters(state.trades));
+    renderFiltered();
   });
 
-  // ── Table filter: direction ──────────────────────────────────
-  dom.filterSide.addEventListener('change', () => {
-    state.tableFilter.side = dom.filterSide.value;
-    renderTradesTable(state.trades);
-    renderChart(applyTableFilters(state.trades));
+  // Side
+  dom.sideSeg.addEventListener('click', (e) => {
+    const b = e.target.closest('.seg-btn');
+    if (!b) return;
+    state.tableFilter.side = b.dataset.side;
+    syncSideSeg();
+    renderFiltered();
   });
 
-  // Close dropdowns on outside click.
-  // Use mousedown (fires before the browser opens the native date-picker calendar)
-  // so the panel stays open while the user interacts with the date picker.
+  // Free-text search (debounced so typing stays smooth)
+  let searchTimer = 0;
+  dom.tfSearch.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.tableFilter.search = dom.tfSearch.value;
+      renderFiltered();
+    }, 160);
+  });
+
+  dom.chartFilterChip.addEventListener('click', clearTableFilters);
+
+  // Chart mode
+  dom.chartModeSeg.addEventListener('click', (e) => {
+    const b = e.target.closest('.seg-btn');
+    if (!b || b.dataset.mode === state.chartMode) return;
+    state.chartMode = b.dataset.mode;
+    dom.chartModeSeg.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('is-active', x === b));
+    renderChart(applyTableFilters(state.trades));
+  });
+  document.addEventListener('illustrade:theme', () => { if (state.loaded) renderChart(applyTableFilters(state.trades)); });
+
+  // Close floating panels on outside press. mousedown fires before the native
+  // date picker opens, so the panel stays open while a date is being picked.
   document.addEventListener('mousedown', (e) => {
-    if (!dom.tfDateDropdown?.contains(e.target))   closePanel(dom.tfDatePanel, dom.tfDateBtn);
-    if (!dom.tfSymbolDropdown?.contains(e.target)) closePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
+    if (!dom.tfDateDropdown.contains(e.target))   closePanel(dom.tfDatePanel, dom.tfDateBtn);
+    if (!dom.tfSymbolDropdown.contains(e.target)) closePanel(dom.tfSymbolPanel, dom.tfSymbolBtn);
+    if (!dom.userMenu.hidden && !e.target.closest('#userInfo')) closeUserMenu();
   });
-  // Prevent mousedown inside a panel from bubbling to the above handler
-  dom.tfDatePanel.addEventListener(  'mousedown', (e) => e.stopPropagation());
-  dom.tfSymbolPanel.addEventListener('mousedown', (e) => e.stopPropagation());
 
-  // CSV Import
+  // CSV import / export / template
   dom.importBtn.addEventListener('click', () => dom.csvFileInput.click());
   dom.csvFileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) importCSV(file);
   });
+  dom.exportBtn.addEventListener('click', exportCSV);
+  dom.templateBtn.addEventListener('click', downloadTemplate);
 
-  // CSV Export
-  dom.exportBtn.addEventListener('click', async () => {
-    dom.exportBtn.disabled = true;
-    dom.exportBtn.textContent = t('toolbar.exporting');
-    try {
-      const qs = buildQuery({ start_date: dom.startDate.value || null, end_date: dom.endDate.value || null });
-      const token = getToken();
-      const res = await fetch(`${API_BASE}/export${qs}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `trades_export_${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch (err) {
-      showToast(`${t('toast.export.fail')} ${err.message}`, 'error', 6000);
-    } finally {
-      dom.exportBtn.disabled = false;
-      dom.exportBtn.textContent = t('toolbar.export');
-    }
-  });
+  // Live quantity unit + coin conversion, and real capital
+  [dom.fSymbol, dom.fEntry, dom.fQty].forEach(el => el.addEventListener('input', updateQtyConversion));
+  [dom.fQty, dom.fLeverage].forEach(el => el.addEventListener('input', updateNotional));
 
-  // Template download — generated client-side, no backend needed
-  dom.templateBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    const headers = 'symbol,side,entry_price,exit_price,quantity,pnl,roe,leverage,risk_reward,entries,open_time,close_time,notes';
-    const example = 'BTC/USDT,long,60000,62000,0.1,200,3.33,10,2.0,1,2024-01-01T10:00:00,2024-01-01T12:00:00,Example trade';
-    const blob = new Blob([headers + '\n' + example], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'trades_template.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-
-  // Live quantity unit + coin conversion
-  dom.fSide.addEventListener('change', updateQtyConversion);
-  dom.fSymbol.addEventListener('input', updateQtyConversion);
-  dom.fEntry.addEventListener('input', updateQtyConversion);
-  dom.fQty.addEventListener('input', updateQtyConversion);
-
-  // Live leverage notional calculator
-  function updateNotional() {
-    const qty      = parseFloat(dom.fQty.value);
-    const leverage = parseFloat(dom.fLeverage.value);
-    if (!isNaN(qty) && !isNaN(leverage) && leverage >= 1) {
-      const realCapital = qty / leverage;
-      dom.leverageNotional.textContent = '$' + realCapital.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      dom.leverageNotionalGroup.style.display = '';
-    } else {
-      dom.leverageNotional.textContent = '—';
-      dom.leverageNotionalGroup.style.display = 'none';
-    }
-  }
-  dom.fEntry.addEventListener('input', updateNotional);
-  dom.fQty.addEventListener('input', updateNotional);
-  dom.fLeverage.addEventListener('input', updateNotional);
-
-  // Add Trade Modal
+  // Add/Edit modal
   dom.modalClose.addEventListener('click', closeAddModal);
-  dom.cancelBtn.addEventListener( 'click', closeAddModal);
-  dom.modalBackdrop.addEventListener('click', (e) => {
-    if (e.target === dom.modalBackdrop) closeAddModal();
-  });
+  dom.cancelBtn.addEventListener('click', closeAddModal);
+  dom.modalBackdrop.addEventListener('click', (e) => { if (e.target === dom.modalBackdrop) closeAddModal(); });
   dom.tradeForm.addEventListener('submit', handleFormSubmit);
 
-  // Delete Confirm Modal
-  dom.confirmClose.addEventListener(    'click', closeConfirmModal);
+  // Delete confirm modal
+  dom.confirmClose.addEventListener('click', closeConfirmModal);
   dom.confirmCancelBtn.addEventListener('click', closeConfirmModal);
-  dom.confirmDeleteBtn.addEventListener('click', () => {
-    if (state.pendingDeleteId != null) deleteTrade(state.pendingDeleteId);
-  });
-  dom.confirmBackdrop.addEventListener('click', (e) => {
-    if (e.target === dom.confirmBackdrop) closeConfirmModal();
-  });
+  dom.confirmDeleteBtn.addEventListener('click', confirmDelete);
+  dom.confirmBackdrop.addEventListener('click', (e) => { if (e.target === dom.confirmBackdrop) closeConfirmModal(); });
 
   // Sort column headers
   document.querySelectorAll('.trades-table th[data-sort]').forEach(th => {
@@ -2004,45 +2050,43 @@ function bindEvents() {
       if (state.tableSort.col === col) {
         state.tableSort.dir = state.tableSort.dir === 'asc' ? 'desc' : 'asc';
       } else {
-        state.tableSort.col = col;
-        state.tableSort.dir = 'desc';
+        state.tableSort = { col, dir: 'desc' };
       }
-      renderTradesTable(state.trades);
+      renderTradesTable(applyTableFilters(state.trades));
     });
   });
 
-  // Table delegation
-  dom.tradesBody.addEventListener('click', handleTableClick);
+  // Row actions
+  dom.tradesBody.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    if (btn.dataset.action === 'delete') openConfirmModal([btn.dataset.id]);
+    if (btn.dataset.action === 'edit') openEditModal(btn.dataset.id);
+  });
 
   // Row checkboxes
   dom.tradesBody.addEventListener('change', (e) => {
     const cb = e.target.closest('input[data-select]');
     if (!cb) return;
     const id = Number(cb.dataset.select);
-    if (cb.checked) state.selectedIds.add(id);
-    else state.selectedIds.delete(id);
+    if (cb.checked) state.selectedIds.add(id); else state.selectedIds.delete(id);
+    cb.closest('tr').classList.toggle('is-selected', cb.checked);
     updateSelectionUI();
   });
-
-  // Select all
   dom.selectAll.addEventListener('change', () => {
-    const checkboxes = dom.tradesBody.querySelectorAll('input[data-select]');
-    checkboxes.forEach(cb => {
+    dom.tradesBody.querySelectorAll('input[data-select]').forEach(cb => {
       const id = Number(cb.dataset.select);
       cb.checked = dom.selectAll.checked;
-      if (dom.selectAll.checked) state.selectedIds.add(id);
-      else state.selectedIds.delete(id);
+      cb.closest('tr').classList.toggle('is-selected', cb.checked);
+      if (cb.checked) state.selectedIds.add(id); else state.selectedIds.delete(id);
     });
     updateSelectionUI();
   });
+  dom.bulkDeleteBtn.addEventListener('click', () => {
+    if (state.selectedIds.size) openConfirmModal([...state.selectedIds]);
+  });
 
-  // Bulk delete
-  dom.bulkDeleteBtn.addEventListener('click', bulkDeleteTrades);
-
-  // Retry button
   dom.retryBtn.addEventListener('click', refreshAll);
-
-  // Keyboard
   document.addEventListener('keydown', handleKeydown);
 }
 
@@ -2050,68 +2094,40 @@ function bindEvents() {
    INITIALISE
    ════════════════════════════════════════════════════════════ */
 
-/**
- * Set a sensible default date range (last 30 days).
- */
-function setDefaultDateRange() {
-  const today = new Date();
-  const prior = new Date();
-  prior.setDate(prior.getDate() - 30);
-  const todayStr = today.toISOString().slice(0, 10);
-  const priorStr = prior.toISOString().slice(0, 10);
-
-  dom.endDate.value     = todayStr;
-  dom.startDate.value   = priorStr;
-  dom.tfEndDate.value   = todayStr;
-  dom.tfStartDate.value = priorStr;
-  if (dom.tfDateLabel) dom.tfDateLabel.textContent = t('filter.last30');
-}
-
 async function init() {
-  // Apply saved theme before anything renders
+  loadPeriod();
   applyTheme(localStorage.getItem(_THEME_KEY) || 'dark');
   applyLang(localStorage.getItem(_LANG_KEY) || 'en');
-  document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
-  document.getElementById('loginThemeToggle')?.addEventListener('click', toggleTheme);
+  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+  document.getElementById('loginThemeToggle').addEventListener('click', toggleTheme);
   initLangDropdowns();
   initBgCanvas();
-  initLoginCanvas();
-
-  // Always wire the login form first (it's in the DOM from page load)
+  loginCanvas = initLoginCanvas();
   bindLoginEvents();
+  bindEvents();
+  renderAll();
 
   const token = getToken();
   const user  = getStoredUser();
 
   if (token && user) {
-    // Show login screen locked while we verify the stored token
+    // Show the login screen locked while the stored token is verified
     document.getElementById('loginScreen').hidden = false;
-    const _verifyBtn = document.getElementById('loginBtn');
-    _verifyBtn.disabled = true;
-    _verifyBtn.textContent = 'Verifying…';
-
-    // Verify the stored token is still accepted by the server
+    const verifyBtn = document.getElementById('loginBtn');
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = t('login.verifying');
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      const res = await fetch(`${API_BASE}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (!res.ok) throw new Error('token_invalid');
       const currentUser = await res.json();
-      saveAuth(token, currentUser);   // refresh stored user data
+      saveAuth(token, currentUser);
       showApp(currentUser);
-      setDefaultDateRange();
-      bindEvents();
-      setConnectionStatus('', 'Connecting…');
       await refreshAll();
       return;
     } catch (err) {
-      // Only clear stored credentials on an explicit auth rejection (401/403).
-      // A network/CORS failure (TypeError) means the server is sleeping — keep
-      // the token so the user can log in again without re-entering credentials.
-      if (err.message === 'token_invalid') {
-        clearAuth();
-      }
-      // Either way fall through to show the login screen
+      // Only clear stored credentials on an explicit auth rejection. A network
+      // failure (TypeError) means the server is sleeping — keep the token.
+      if (err.message === 'token_invalid') clearAuth();
     }
   }
 
@@ -2121,8 +2137,8 @@ async function init() {
   const storedUser = getStoredUser();
   if (storedUser?.username) {
     const usernameEl = document.getElementById('loginUsername');
-    if (usernameEl && !usernameEl.value) usernameEl.value = storedUser.username;
-    document.getElementById('loginPassword')?.focus();
+    if (!usernameEl.value) usernameEl.value = storedUser.username;
+    document.getElementById('loginPassword').focus();
   }
 }
 
@@ -2222,8 +2238,8 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
 (function initFibCalc() {
   const $ = (id) => document.getElementById(id);
 
-  const TRADE_COLORS = ['#39ff14', '#7ab8ff', '#c17aff', '#ffb400', '#ff7a7a'];
-  const ENTRY_COLORS = ['#39ff14', '#7affcc', '#7ab8ff', '#c17aff'];
+  const TRADE_COLORS = ['var(--accent-primary)', '#7ab8ff', '#c17aff', '#ffb400', '#ff7a7a'];
+  const ENTRY_COLORS = ['var(--accent-primary)', '#7affcc', '#7ab8ff', '#c17aff'];
   let slMode = 'conservative';
 
   // ── Pinned trades persistence ──────────────────────────
@@ -2384,7 +2400,7 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
 
     slotsEl.innerHTML = '';
     for (let i = 0; i < n; i++) {
-      const color = TRADE_COLORS[i] || '#39ff14';
+      const color = TRADE_COLORS[i] || TRADE_COLORS[0];
       const saved = prev[i] || {};
       const slot  = document.createElement('div');
       slot.className = 'fib-trade-slot';
@@ -2816,14 +2832,14 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
     // Index of the last non-projected point — segments after it render dashed
     const lastHistoricalIndex = points.reduce((acc, p, i) => (p.projected ? acc : i), 0);
 
-    const theme = document.documentElement.getAttribute('data-theme');
-    const poolColor  = theme === 'purple' ? '#00e5ff' : '#39ff14';
-    const benchColor = theme === 'purple' ? '#c084fc' : '#8b949e';
+    const pal = chartPalette();
+    const poolColor  = pal.up;
+    const benchColor = pal.muted;
 
     const ctx = $id('poolGrowthChart').getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 220);
-    gradient.addColorStop(0,   poolColor + '33');
-    gradient.addColorStop(1,   poolColor + '00');
+    gradient.addColorStop(0,   withAlpha(poolColor, 0.2));
+    gradient.addColorStop(1,   withAlpha(poolColor, 0));
 
     if (growthChart) growthChart.destroy();
     growthChart = new Chart(ctx, {
@@ -2865,14 +2881,19 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: withAlpha(pal.tipBg, 0.96),
+            borderColor: pal.border,
+            borderWidth: 1,
+            titleColor: pal.text,
+            bodyColor: pal.tipText,
             callbacks: {
               label: (tCtx) => `${tCtx.dataset.label}: ${fmt(tCtx.parsed.y)}`,
             },
           },
         },
         scales: {
-          x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
-          y: { ticks: { callback: (v) => '$' + Number(v).toLocaleString('en-US') } },
+          x: { grid: { display: false }, border: { display: false }, ticks: { color: pal.muted, maxTicksLimit: 8 } },
+          y: { grid: { color: pal.grid }, border: { display: false }, ticks: { color: pal.muted, callback: (v) => '$' + Number(v).toLocaleString('en-US') } },
         },
       },
     });
@@ -3508,9 +3529,15 @@ function calcFib({ account, riskPct, leverage, e1Price, slMode, tpPct = 5, side 
     const sec = poolSection();
     sec.hidden = true;
     sec.querySelectorAll('tbody').forEach(t => { t.innerHTML = ''; });
-    sec.querySelectorAll('[id^="pool"]').forEach(el => { if (!el.matches('input,select,button,textarea')) el.textContent = ''; });
+    // Wipe the numbers, never the structure: the same page may sign the owner in again
+    sec.querySelectorAll('.pool-card-value, .pool-card-sub, #poolChartLegend, #poolPieContainer, #poolStaleBadge, #poolDeficitNote, #poolConcentrationWarning')
+      .forEach(el => { el.textContent = ''; });
+    if (growthChart) { growthChart.destroy(); growthChart = null; }
     showError(null);
   }
+  document.addEventListener('illustrade:logout', lockPool);
+  // Pool chart colours come from the theme
+  document.addEventListener('illustrade:theme', () => { if (growthChart) renderGrowthChart(); });
   // refreshAll() calls this after login / on refresh
   window.refreshPool = load;
 

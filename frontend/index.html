@@ -3,11 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
   <title>IllusTrade</title>
-  <link rel="stylesheet" href="style.css?v=17" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="style.css?v=18" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
+
+  <!-- Icon sprite: every icon in the app is a <use href="#i-…"> of one of these -->
+  <svg class="icon-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><path d="m20 20-4.2-4.2M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13z"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-hub" viewBox="0 0 24 24"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></symbol>
+    <symbol id="i-exchange" viewBox="0 0 24 24"><path d="M4 8h13l-3-3m6 11H7l3 3"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  </svg>
 
   <!-- ═══════════════════════════════════ BACKGROUND CANVAS ANIMATION -->
   <canvas id="bgCanvas" aria-hidden="true"></canvas>
@@ -20,20 +41,20 @@
 
     <!-- Theme toggle visible before login -->
     <div class="login-topbar">
-      <button class="theme-toggle" id="loginThemeToggle" title="Switch theme">
+      <button class="theme-toggle" id="loginThemeToggle" type="button" title="Switch theme">
         <span class="theme-icon">🌙</span>
         <span class="theme-label">Dark</span>
       </button>
       <div class="lang-dropdown" id="loginLangDropdown">
-        <button class="lang-toggle" id="loginLangToggle" title="Switch language">
+        <button class="lang-toggle" id="loginLangToggle" type="button" title="Switch language">
           <span class="lang-flag">🇺🇸</span>
           <span class="lang-label">EN</span>
           <span class="lang-arrow">▾</span>
         </button>
         <div class="lang-menu">
-          <button class="lang-option active" data-lang="en">🇺🇸 English</button>
-          <button class="lang-option" data-lang="es">🇪🇸 Español</button>
-          <button class="lang-option" data-lang="fr">🇫🇷 Français</button>
+          <button class="lang-option active" type="button" data-lang="en">🇺🇸 English</button>
+          <button class="lang-option" type="button" data-lang="es">🇪🇸 Español</button>
+          <button class="lang-option" type="button" data-lang="fr">🇫🇷 Français</button>
         </div>
       </div>
     </div>
@@ -99,32 +120,52 @@
     <div class="header-left">
       <img id="headerLogo" src="Imges/NeonGreenLogo.png" alt="IllusTrade" class="logo-img logo-img--header" />
     </div>
+
+    <!-- Live ticker tape: real Bitunix prices (market.js), shown after login -->
+    <div class="tape" id="tape" aria-label="Live market prices" hidden>
+      <div class="tape-track" id="tapeTrack"></div>
+      <div class="tape-state" id="tapeState" data-i18n="tape.connecting">Connecting to market…</div>
+    </div>
+
     <div class="header-right">
       <div class="connection-status" id="connectionStatus">
         <span class="status-dot"></span>
         <span class="status-label">Connecting…</span>
       </div>
-      <button class="theme-toggle" id="themeToggle" title="Switch theme">
+      <button class="theme-toggle" id="themeToggle" type="button" title="Switch theme">
         <span class="theme-icon">🌙</span>
         <span class="theme-label">Dark</span>
       </button>
       <div class="lang-dropdown" id="langDropdown">
-        <button class="lang-toggle" id="langToggle" title="Switch language">
+        <button class="lang-toggle" id="langToggle" type="button" title="Switch language">
           <span class="lang-flag">🇺🇸</span>
           <span class="lang-label">EN</span>
           <span class="lang-arrow">▾</span>
         </button>
         <div class="lang-menu">
-          <button class="lang-option active" data-lang="en">🇺🇸 English</button>
-          <button class="lang-option" data-lang="es">🇪🇸 Español</button>
-          <button class="lang-option" data-lang="fr">🇫🇷 Français</button>
+          <button class="lang-option active" type="button" data-lang="en">🇺🇸 English</button>
+          <button class="lang-option" type="button" data-lang="es">🇪🇸 Español</button>
+          <button class="lang-option" type="button" data-lang="fr">🇫🇷 Français</button>
         </div>
       </div>
       <div class="user-info" id="userInfo" hidden>
-        <span class="user-name" id="userNameDisplay"></span>
-        <button class="btn btn-ghost btn-sm" id="exchangesBtn" type="button">My Exchanges</button>
-        <a class="btn btn-ghost btn-sm" id="hubLink" href="hub.html" title="Position Hub (owner only)">Position Hub</a>
-        <button class="btn btn-ghost btn-sm" id="logoutBtn" data-i18n="header.signout">Sign Out</button>
+        <button class="user-chip" id="userMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false">
+          <span class="user-avatar" id="userAvatar" aria-hidden="true"></span>
+          <span class="user-name" id="userNameDisplay"></span>
+          <svg class="ico ico-sm"><use href="#i-chevron"/></svg>
+        </button>
+        <div class="user-menu" id="userMenu" role="menu" hidden>
+          <a class="user-menu-item" id="hubLink" href="hub.html" role="menuitem">
+            <svg class="ico"><use href="#i-hub"/></svg><span data-i18n="menu.hub">Position Hub</span>
+          </a>
+          <button class="user-menu-item" id="exchangesBtn" type="button" role="menuitem">
+            <svg class="ico"><use href="#i-exchange"/></svg><span data-i18n="menu.exchanges">My Exchanges</span>
+          </button>
+          <div class="user-menu-sep"></div>
+          <button class="user-menu-item user-menu-danger" id="logoutBtn" type="button" role="menuitem">
+            <svg class="ico"><use href="#i-logout"/></svg><span data-i18n="header.signout">Sign Out</span>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -134,148 +175,268 @@
 
   <div class="content-left">
 
-    <!-- ── TOOLBAR ──────────────────────────────────── -->
-    <section class="toolbar" aria-label="Filters and actions">
-      <div class="filter-group">
-        <label class="filter-label" for="startDate" data-i18n="toolbar.from">From</label>
-        <input class="input-field" type="date" id="startDate" />
-        <label class="filter-label" for="endDate" data-i18n="toolbar.to">To</label>
-        <input class="input-field" type="date" id="endDate" />
-        <button class="btn btn-secondary" id="applyFilter" data-i18n="toolbar.apply">Apply</button>
-        <button class="btn btn-ghost" id="clearFilter" data-i18n="toolbar.clear">Clear</button>
-        <div class="quick-range-group">
-          <button class="btn btn-ghost quick-range-btn" data-days="7" data-i18n="filter.past7">Past 7 days</button>
-          <button class="btn btn-ghost quick-range-btn" data-days="30" data-i18n="filter.past30">Past 30 days</button>
-          <button class="btn btn-ghost quick-range-btn" data-days="90" data-i18n="filter.past90">Past 90 days</button>
+    <!-- ── COMMAND BAR: one period for the whole dashboard + actions ── -->
+    <section class="command-bar" aria-label="Period and actions">
+      <div class="period" id="periodSeg" role="group" aria-label="Period">
+        <button class="period-btn" type="button" data-preset="7">7D</button>
+        <button class="period-btn" type="button" data-preset="30">30D</button>
+        <button class="period-btn" type="button" data-preset="90">90D</button>
+        <button class="period-btn" type="button" data-preset="ytd" data-i18n="period.ytd">YTD</button>
+        <button class="period-btn" type="button" data-preset="all" data-i18n="period.all">All</button>
+        <div class="tf-dropdown" id="tfDateDropdown">
+          <button class="period-btn period-custom" id="tfDateBtn" type="button" aria-haspopup="dialog">
+            <svg class="ico ico-sm"><use href="#i-calendar"/></svg>
+            <span data-i18n="filter.custom">Custom</span>
+          </button>
+          <div class="tf-panel" id="tfDatePanel" hidden>
+            <div class="tf-panel-label" data-i18n="filter.custom">Custom</div>
+            <div class="tf-date-row">
+              <div class="tf-date-col">
+                <label class="tf-panel-label" for="tfStartDate" data-i18n="filter.from">From</label>
+                <input class="input-field tf-date-input" type="date" id="tfStartDate" />
+              </div>
+              <div class="tf-date-col">
+                <label class="tf-panel-label" for="tfEndDate" data-i18n="filter.to">To</label>
+                <input class="input-field tf-date-input" type="date" id="tfEndDate" />
+              </div>
+            </div>
+            <button class="btn btn-primary tf-apply-btn" id="tfApplyDate" type="button" data-i18n="toolbar.apply">Apply</button>
+          </div>
         </div>
       </div>
+      <div class="period-caption" id="periodCaption"></div>
+
+      <!-- Market sessions + local clock (market.js) -->
+      <div class="sessions" id="sessions" aria-label="Market sessions"></div>
+
       <div class="action-group">
-        <button class="btn btn-secondary" id="importBtn" data-i18n="toolbar.import">↑ Import CSV</button>
-        <button class="btn btn-secondary" id="exportBtn" data-i18n="toolbar.export">↓ Export CSV</button>
-        <a class="btn btn-ghost" id="templateBtn" href="#" download data-i18n="toolbar.template">↓ Template</a>
-        <input type="file" id="csvFileInput" accept=".csv" style="display:none" />
-        <button class="btn btn-primary" id="addTradeBtn" data-i18n="toolbar.addtrade">+ Add Trade</button>
+        <button class="btn btn-ghost" id="importBtn" type="button">
+          <svg class="ico"><use href="#i-upload"/></svg><span data-i18n="toolbar.import">Import CSV</span>
+        </button>
+        <button class="btn btn-ghost" id="exportBtn" type="button">
+          <svg class="ico"><use href="#i-download"/></svg><span data-i18n="toolbar.export">Export CSV</span>
+        </button>
+        <button class="btn btn-ghost" id="templateBtn" type="button">
+          <svg class="ico"><use href="#i-file"/></svg><span data-i18n="toolbar.template">Template</span>
+        </button>
+        <input type="file" id="csvFileInput" accept=".csv" hidden />
+        <button class="btn btn-primary" id="addTradeBtn" type="button" title="New trade (N)">
+          <svg class="ico"><use href="#i-plus"/></svg><span data-i18n="toolbar.addtrade">Add Trade</span>
+        </button>
       </div>
     </section>
 
-    <!-- ── METRICS CARDS ─────────────────────────────── -->
-    <section class="metrics-grid" aria-label="Performance metrics">
+    <!-- ── HERO: net P&L + curve, and the edge panel ───────────── -->
+    <section class="hero" aria-label="Performance overview">
 
-      <article class="metric-card" id="card-winRate">
-        <div class="metric-label" data-i18n="metric.winrate">Win Rate</div>
-        <div class="metric-value" id="metricWinRate">—</div>
-        <div class="metric-sub" id="metricWinRateSub">&nbsp;</div>
+      <article class="panel hero-equity" id="card-pnl">
+        <div class="hero-top">
+          <div>
+            <div class="eyebrow"><span class="live-dot"></span><span data-i18n="metric.pnl">Net P&amp;L</span> · <span id="heroPeriod"></span></div>
+            <div class="hero-value metric-value" id="metricPnl">—</div>
+            <div class="hero-sub" id="metricPnlSub">&nbsp;</div>
+          </div>
+          <div class="hero-stats">
+            <div class="hstat">
+              <span class="hstat-label" data-i18n="hero.pf">Profit factor</span>
+              <span class="hstat-value" id="heroPF">—</span>
+            </div>
+            <div class="hstat">
+              <span class="hstat-label" data-i18n="hero.expectancy">Expectancy</span>
+              <span class="hstat-value" id="heroExp">—</span>
+            </div>
+            <div class="hstat">
+              <span class="hstat-label" data-i18n="hero.bestday">Best day</span>
+              <span class="hstat-value" id="heroBestDay">—</span>
+            </div>
+            <div class="hstat">
+              <span class="hstat-label" data-i18n="hero.worstday">Worst day</span>
+              <span class="hstat-value" id="heroWorstDay">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-head">
+          <div class="seg" id="chartModeSeg" role="tablist" aria-label="Chart view">
+            <button class="seg-btn is-active" type="button" role="tab" data-mode="equity" data-i18n="chart.equity">Equity</button>
+            <button class="seg-btn" type="button" role="tab" data-mode="daily" data-i18n="chart.daily">Daily P&amp;L</button>
+            <button class="seg-btn" type="button" role="tab" data-mode="drawdown" data-i18n="chart.drawdown">Drawdown</button>
+          </div>
+          <button class="filter-chip" id="chartFilterChip" type="button" hidden></button>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="pnlChart" role="img" aria-label="P&L chart"></canvas>
+          <div class="chart-empty" id="chartEmpty" data-i18n="chart.empty">No trade data to display.</div>
+        </div>
       </article>
 
-      <article class="metric-card" id="card-pnl">
-        <div class="metric-label" data-i18n="metric.pnl">Total P&amp;L</div>
-        <div class="metric-value" id="metricPnl">—</div>
-        <div class="metric-sub" id="metricPnlSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-totalLosses">
-        <div class="metric-label" data-i18n="metric.totallosses">Total Losses</div>
-        <div class="metric-value" id="metricTotalLosses">—</div>
-        <div class="metric-sub" id="metricTotalLossesSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-drawdown">
-        <div class="metric-label" data-i18n="metric.drawdown">Max Drawdown</div>
-        <div class="metric-value" id="metricDrawdown">—</div>
-        <div class="metric-sub" id="metricDrawdownSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-maxProfit">
-        <div class="metric-label" data-i18n="metric.maxprofit">Max Profit</div>
-        <div class="metric-value" id="metricMaxProfit">—</div>
-        <div class="metric-sub" id="metricMaxProfitSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-rr">
-        <div class="metric-label" data-i18n="metric.rr">Avg R:R</div>
-        <div class="metric-value" id="metricRR">—</div>
-        <div class="metric-sub" id="metricRRSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-streak">
-        <div class="metric-label" data-i18n="metric.streak">Current Streak</div>
-        <div class="metric-value" id="metricStreak">—</div>
-        <div class="metric-sub" id="metricStreakSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-total">
-        <div class="metric-label" data-i18n="metric.total">Total Trades</div>
-        <div class="metric-value" id="metricTotal">—</div>
-        <div class="metric-sub" id="metricTotalSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-avgRoe">
-        <div class="metric-label" data-i18n="metric.avgroe">Avg ROE %</div>
-        <div class="metric-value" id="metricAvgRoe">—</div>
-        <div class="metric-sub" id="metricAvgRoeSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-avgEntries">
-        <div class="metric-label" data-i18n="metric.avgentries">Avg Entries</div>
-        <div class="metric-value" id="metricAvgEntries">—</div>
-        <div class="metric-sub" id="metricAvgEntriesSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-avgDuration">
-        <div class="metric-label" data-i18n="metric.avgduration">Avg Duration</div>
-        <div class="metric-value" id="metricAvgDuration">—</div>
-        <div class="metric-sub" id="metricAvgDurationSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-avgPnl">
-        <div class="metric-label" data-i18n="metric.avgpnl">Avg P&amp;L</div>
-        <div class="metric-value" id="metricAvgPnl">—</div>
-        <div class="metric-sub" id="metricAvgPnlSub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-avgDaily">
-        <div class="metric-label" data-i18n="metric.avgdaily">Avg Daily</div>
-        <div class="metric-value" id="metricAvgDaily">—</div>
-        <div class="metric-sub" id="metricAvgDailySub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-avgWeekly">
-        <div class="metric-label" data-i18n="metric.avgweekly">Avg Weekly</div>
-        <div class="metric-value" id="metricAvgWeekly">—</div>
-        <div class="metric-sub" id="metricAvgWeeklySub">&nbsp;</div>
-      </article>
-
-      <article class="metric-card" id="card-avgMonthly">
-        <div class="metric-label" data-i18n="metric.avgmonthly">Avg Monthly</div>
-        <div class="metric-value" id="metricAvgMonthly">—</div>
-        <div class="metric-sub" id="metricAvgMonthlySub">&nbsp;</div>
+      <article class="panel hero-edge" id="card-winRate">
+        <div class="eyebrow" data-i18n="hero.edge">Edge</div>
+        <div class="ring">
+          <svg class="ring-svg" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-track" cx="60" cy="60" r="50"/>
+            <circle class="ring-loss" id="ringLoss" cx="60" cy="60" r="50"/>
+            <circle class="ring-win" id="ringWin" cx="60" cy="60" r="50"/>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-value metric-value" id="metricWinRate">—</div>
+            <div class="ring-label" data-i18n="metric.winrate">Win Rate</div>
+            <div class="ring-sub" id="metricWinRateSub">&nbsp;</div>
+          </div>
+        </div>
+        <div class="edge-rows" id="edgeRows"></div>
       </article>
 
     </section>
 
-    <!-- ── P&L CHART ──────────────────────────────────── -->
-    <section class="chart-section" aria-label="Cumulative P&L chart">
-      <div class="section-header">
-        <h2 class="section-title" data-i18n="chart.title">Cumulative P&amp;L</h2>
-        <div class="chart-legend">
-          <span class="legend-dot legend-win"></span><span data-i18n="chart.positive">Positive</span>
-          <span class="legend-dot legend-loss"></span><span data-i18n="chart.negative">Negative</span>
+    <!-- ── KPI BOARD ─────────────────────────────────────────── -->
+    <section class="kpi-board" aria-label="Performance metrics">
+
+      <div class="kpi-group">
+        <div class="kpi-group-title" data-i18n="group.risk">Risk</div>
+        <div class="kpi-grid">
+          <article class="metric-card" id="card-totalLosses">
+            <div class="metric-label" data-i18n="metric.totallosses">Total Losses</div>
+            <div class="metric-value" id="metricTotalLosses">—</div>
+            <div class="metric-sub" id="metricTotalLossesSub">&nbsp;</div>
+            <div class="metric-viz" id="vizLosses"></div>
+          </article>
+          <article class="metric-card" id="card-drawdown">
+            <div class="metric-label" data-i18n="metric.drawdown">Max Drawdown</div>
+            <div class="metric-value" id="metricDrawdown">—</div>
+            <div class="metric-sub" id="metricDrawdownSub">&nbsp;</div>
+            <div class="metric-viz" id="vizDrawdown"></div>
+          </article>
+          <article class="metric-card" id="card-maxProfit">
+            <div class="metric-label" data-i18n="metric.maxprofit">Max Profit</div>
+            <div class="metric-value" id="metricMaxProfit">—</div>
+            <div class="metric-sub" id="metricMaxProfitSub">&nbsp;</div>
+            <div class="metric-viz" id="vizMaxProfit"></div>
+          </article>
+          <article class="metric-card" id="card-rr">
+            <div class="metric-label" data-i18n="metric.rr">Avg R:R</div>
+            <div class="metric-value" id="metricRR">—</div>
+            <div class="metric-sub" id="metricRRSub">&nbsp;</div>
+            <div class="metric-viz" id="vizRR"></div>
+          </article>
+          <article class="metric-card" id="card-streak">
+            <div class="metric-label" data-i18n="metric.streak">Current Streak</div>
+            <div class="metric-value" id="metricStreak">—</div>
+            <div class="metric-sub" id="metricStreakSub">&nbsp;</div>
+            <div class="metric-viz" id="vizStreak"></div>
+          </article>
         </div>
       </div>
-      <div class="chart-wrapper">
-        <canvas id="pnlChart" role="img" aria-label="Cumulative P&L line chart"></canvas>
-        <div class="chart-empty" id="chartEmpty" data-i18n="chart.empty">No trade data to display.</div>
+
+      <div class="kpi-group">
+        <div class="kpi-group-title" data-i18n="group.execution">Execution</div>
+        <div class="kpi-grid">
+          <article class="metric-card" id="card-total">
+            <div class="metric-label" data-i18n="metric.total">Total Trades</div>
+            <div class="metric-value" id="metricTotal">—</div>
+            <div class="metric-sub" id="metricTotalSub">&nbsp;</div>
+            <div class="metric-viz" id="vizTotal"></div>
+          </article>
+          <article class="metric-card" id="card-avgRoe">
+            <div class="metric-label" data-i18n="metric.avgroe">Avg ROE %</div>
+            <div class="metric-value" id="metricAvgRoe">—</div>
+            <div class="metric-sub" id="metricAvgRoeSub">&nbsp;</div>
+            <div class="metric-viz" id="vizRoe"></div>
+          </article>
+          <article class="metric-card" id="card-avgPnl">
+            <div class="metric-label" data-i18n="metric.avgpnl">Avg P&amp;L</div>
+            <div class="metric-value" id="metricAvgPnl">—</div>
+            <div class="metric-sub" id="metricAvgPnlSub">&nbsp;</div>
+            <div class="metric-viz" id="vizAvgPnl"></div>
+          </article>
+          <article class="metric-card" id="card-avgEntries">
+            <div class="metric-label" data-i18n="metric.avgentries">Avg Entries</div>
+            <div class="metric-value" id="metricAvgEntries">—</div>
+            <div class="metric-sub" id="metricAvgEntriesSub">&nbsp;</div>
+            <div class="metric-viz" id="vizEntries"></div>
+          </article>
+          <article class="metric-card" id="card-avgDuration">
+            <div class="metric-label" data-i18n="metric.avgduration">Avg Duration</div>
+            <div class="metric-value" id="metricAvgDuration">—</div>
+            <div class="metric-sub" id="metricAvgDurationSub">&nbsp;</div>
+            <div class="metric-viz" id="vizDuration"></div>
+          </article>
+        </div>
       </div>
+
+      <div class="kpi-group">
+        <div class="kpi-group-title" data-i18n="group.cadence">Cadence</div>
+        <div class="kpi-grid">
+          <article class="metric-card" id="card-avgDaily">
+            <div class="metric-label" data-i18n="metric.avgdaily">Avg Daily</div>
+            <div class="metric-value" id="metricAvgDaily">—</div>
+            <div class="metric-sub" id="metricAvgDailySub">&nbsp;</div>
+            <div class="metric-viz" id="vizDaily"></div>
+          </article>
+          <article class="metric-card" id="card-avgWeekly">
+            <div class="metric-label" data-i18n="metric.avgweekly">Avg Weekly</div>
+            <div class="metric-value" id="metricAvgWeekly">—</div>
+            <div class="metric-sub" id="metricAvgWeeklySub">&nbsp;</div>
+            <div class="metric-viz" id="vizWeekly"></div>
+          </article>
+          <article class="metric-card" id="card-avgMonthly">
+            <div class="metric-label" data-i18n="metric.avgmonthly">Avg Monthly</div>
+            <div class="metric-value" id="metricAvgMonthly">—</div>
+            <div class="metric-sub" id="metricAvgMonthlySub">&nbsp;</div>
+            <div class="metric-viz" id="vizMonthly"></div>
+          </article>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── INSIGHTS ──────────────────────────────────────────── -->
+    <section class="insights" aria-label="Insights">
+      <article class="panel ins-calendar">
+        <div class="panel-head">
+          <h2 class="section-title" data-i18n="ins.calendar">P&amp;L Calendar</h2>
+          <div class="heat-legend" aria-hidden="true">
+            <span data-i18n="ins.loss">Loss</span>
+            <i class="hl hl-l3"></i><i class="hl hl-l1"></i><i class="hl hl-0"></i><i class="hl hl-w1"></i><i class="hl hl-w3"></i>
+            <span data-i18n="ins.win">Win</span>
+          </div>
+        </div>
+        <div class="cal" id="calHeat"></div>
+      </article>
+
+      <article class="panel ins-symbols">
+        <div class="panel-head">
+          <h2 class="section-title" data-i18n="ins.symbols">Symbol Leaderboard</h2>
+          <span class="panel-hint" data-i18n="ins.clickfilter">Click to filter</span>
+        </div>
+        <div class="board" id="symBoard"></div>
+      </article>
+
+      <article class="panel ins-clock">
+        <div class="panel-head">
+          <h2 class="section-title" data-i18n="ins.clock">When You Win</h2>
+          <span class="panel-hint" data-i18n="ins.clockhint">P&amp;L by weekday and hour, your time</span>
+        </div>
+        <div id="hourHeat"></div>
+      </article>
+
+      <article class="panel ins-dist">
+        <div class="panel-head">
+          <h2 class="section-title" data-i18n="ins.dist">ROE Distribution</h2>
+          <span class="panel-hint" id="roeHistHint"></span>
+        </div>
+        <div id="roeHist"></div>
+      </article>
     </section>
 
     <!-- ── POOL FUND DASHBOARD ──────────────────────────── -->
-    <section class="pool-section" aria-label="Fund pool manager" hidden>
+    <section class="pool-section panel" aria-label="Fund pool manager" hidden>
       <div class="section-header">
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div class="section-title-row">
           <h2 class="section-title">Fund Pool</h2>
           <span class="pool-rate-badge">5% Return</span>
         </div>
-        <button class="btn btn-ghost btn-sm" id="poolToggleBtn">Hide</button>
+        <button class="btn btn-ghost btn-sm" id="poolToggleBtn" type="button">Hide</button>
       </div>
 
       <div id="poolBody">
@@ -289,7 +450,7 @@
                  title="Snapshot date" />
           <input class="input-field pool-input" type="text" id="poolEquityNote"
                  placeholder="Note (optional)" autocomplete="off" maxlength="500" />
-          <button class="btn btn-primary btn-sm" id="poolSnapshotBtn">Save Snapshot</button>
+          <button class="btn btn-primary btn-sm" id="poolSnapshotBtn" type="button">Save Snapshot</button>
         </div>
 
         <!-- Add contribution -->
@@ -301,7 +462,7 @@
             <button type="button" class="pool-type-btn active" data-type="monthly" role="radio" aria-checked="true">Monthly</button>
             <button type="button" class="pool-type-btn" data-type="compound" role="radio" aria-checked="false">Compound</button>
           </div>
-          <button class="btn btn-primary btn-sm" id="poolAddBtn">+ Add</button>
+          <button class="btn btn-primary btn-sm" id="poolAddBtn" type="button">+ Add</button>
         </div>
 
         <!-- Owner equity: what is left of the account after the fund's obligations -->
@@ -433,114 +594,83 @@
       </div><!-- /#poolBody -->
     </section>
 
-    <!-- ── TRADES TABLE ───────────────────────────────── -->
-    <section class="table-section" aria-label="Trade history">
+    <!-- ── TRADE JOURNAL ──────────────────────────────────────── -->
+    <section class="table-section panel" aria-label="Trade history">
       <div class="section-header">
-        <h2 class="section-title" data-i18n="table.title">Trade History</h2>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button class="btn btn-danger" id="bulkDeleteBtn" hidden>&#128465; Delete Selected (<span id="selectedCount">0</span>)</button>
-          <span class="trade-count" id="tradeCount">0 trades</span>
+        <div class="section-title-row">
+          <h2 class="section-title" data-i18n="table.title">Trade Journal</h2>
+          <span class="trade-count" id="tradeCount">0</span>
         </div>
+        <button class="btn btn-danger btn-sm" id="bulkDeleteBtn" type="button" hidden>
+          <svg class="ico"><use href="#i-trash"/></svg>
+          <span data-i18n="table.deleteselected">Delete selected</span> (<span id="selectedCount">0</span>)
+        </button>
       </div>
 
-      <!-- Table Filters -->
+      <!-- Table filters (the period lives in the command bar) -->
       <div class="table-filters">
+        <label class="tf-searchbox">
+          <svg class="ico"><use href="#i-search"/></svg>
+          <input class="tf-search-input" type="search" id="tfSearch" placeholder="Search symbol or notes…" data-i18n-ph="filter.searchjournal" autocomplete="off" />
+          <kbd>/</kbd>
+        </label>
 
-        <!-- Date Range Dropdown -->
-        <div class="tf-dropdown" id="tfDateDropdown">
-          <button class="tf-dropdown-btn" id="tfDateBtn">
-            <span class="tf-btn-icon">📅</span>
-            <span id="tfDateLabel">Last 30 days</span>
-            <span class="tf-arrow">▾</span>
-          </button>
-          <div class="tf-panel" id="tfDatePanel" hidden>
-            <div class="tf-quick-presets">
-              <button class="tf-quick-btn" data-days="7" data-i18n="filter.past7">Past 7 days</button>
-              <button class="tf-quick-btn" data-days="30" data-i18n="filter.past30">Past 30 days</button>
-              <button class="tf-quick-btn" data-days="90" data-i18n="filter.past90">Past 90 days</button>
-            </div>
-            <div class="tf-panel-divider"></div>
-            <div class="tf-panel-label" style="margin-bottom:8px;" data-i18n="filter.custom">Custom Range</div>
-            <div class="tf-date-row">
-              <div class="tf-date-col">
-                <label class="tf-panel-label" data-i18n="filter.from">From</label>
-                <input class="input-field tf-date-input" type="date" id="tfStartDate" />
-              </div>
-              <div class="tf-date-col">
-                <label class="tf-panel-label" data-i18n="filter.to">To</label>
-                <input class="input-field tf-date-input" type="date" id="tfEndDate" />
-              </div>
-            </div>
-            <button class="btn btn-primary tf-apply-btn" id="tfApplyDate" style="margin-top:10px;">Apply</button>
-          </div>
-        </div>
-
-        <!-- Symbol Multi-select Dropdown -->
         <div class="tf-dropdown" id="tfSymbolDropdown">
-          <button class="tf-dropdown-btn" id="tfSymbolBtn">
-            <span class="tf-btn-icon">🔍</span>
+          <button class="tf-dropdown-btn" id="tfSymbolBtn" type="button">
             <span id="tfSymbolLabel">All Symbols</span>
-            <span class="tf-arrow">▾</span>
+            <svg class="ico ico-sm tf-arrow"><use href="#i-chevron"/></svg>
           </button>
           <div class="tf-panel" id="tfSymbolPanel" hidden>
             <input class="input-field tf-search" type="text" id="tfSymbolSearch" placeholder="Search symbol…" data-i18n-ph="filter.search" autocomplete="off" />
             <div class="tf-symbol-list" id="tfSymbolList"></div>
             <div class="tf-panel-divider"></div>
             <div class="tf-panel-row">
-              <button class="tf-text-btn" id="tfSymbolSelectAll" data-i18n="filter.selectall">Select all</button>
-              <button class="tf-text-btn" id="tfSymbolClear" data-i18n="filter.clear">Clear</button>
+              <button class="tf-text-btn" id="tfSymbolClear" type="button" data-i18n="filter.allsymbols">All Symbols</button>
             </div>
           </div>
         </div>
 
-        <!-- Direction Select -->
-        <div class="tf-group">
-          <select class="input-field tf-select" id="filterSide">
-            <option value="" data-i18n="filter.alldirections">All Directions</option>
-            <option value="long" data-i18n="filter.long">Long</option>
-            <option value="short" data-i18n="filter.short">Short</option>
-          </select>
+        <div class="seg" id="sideSeg" role="group" aria-label="Direction">
+          <button class="seg-btn is-active" type="button" data-side="" data-i18n="filter.both">Both</button>
+          <button class="seg-btn seg-long" type="button" data-side="long" data-i18n="filter.long">Long</button>
+          <button class="seg-btn seg-short" type="button" data-side="short" data-i18n="filter.short">Short</button>
         </div>
-
       </div>
 
       <div class="table-container" role="region" aria-label="Trades table" tabindex="0">
         <table class="trades-table" id="tradesTable">
           <thead>
             <tr>
-              <th scope="col"><input type="checkbox" id="selectAll" title="Select all" /></th>
-              <th scope="col" data-i18n="th.date" data-sort="date" class="th-sortable">Date<span class="sort-arrow"></span></th>
+              <th scope="col" class="th-check"><input type="checkbox" id="selectAll" title="Select all" /></th>
+              <th scope="col" data-sort="date" class="th-sortable"><span data-i18n="th.date">Date</span><span class="sort-arrow"></span></th>
               <th scope="col" data-i18n="th.symbol">Symbol</th>
               <th scope="col" data-i18n="th.side">Side</th>
-              <th scope="col" data-i18n="th.entry">Entry</th>
-              <th scope="col" data-i18n="th.exit">Exit</th>
-              <th scope="col" data-i18n="th.qty">Qty</th>
-              <th scope="col" data-i18n="th.pnl" data-sort="pnl" class="th-sortable">P&amp;L<span class="sort-arrow"></span></th>
-              <th scope="col" data-i18n="th.roe" data-sort="roe" class="th-sortable">ROE %<span class="sort-arrow"></span></th>
-              <th scope="col" data-i18n="th.rr">R:R</th>
-              <th scope="col" data-i18n="th.leverage">Leverage</th>
-              <th scope="col" data-i18n="th.duration">Duration</th>
+              <th scope="col" class="th-num" data-i18n="th.entry">Entry</th>
+              <th scope="col" class="th-num" data-i18n="th.exit">Exit</th>
+              <th scope="col" class="th-num" data-i18n="th.qty">Qty</th>
+              <th scope="col" data-sort="pnl" class="th-sortable th-num"><span data-i18n="th.pnl">P&amp;L</span><span class="sort-arrow"></span></th>
+              <th scope="col" data-sort="roe" class="th-sortable th-num"><span data-i18n="th.roe">ROE %</span><span class="sort-arrow"></span></th>
+              <th scope="col" class="th-num" data-i18n="th.rr">R:R</th>
+              <th scope="col" class="th-num" data-i18n="th.leverage">Leverage</th>
+              <th scope="col" class="th-num" data-i18n="th.duration">Duration</th>
               <th scope="col" data-i18n="th.source">Source</th>
               <th scope="col" data-i18n="th.notes">Notes</th>
-              <th scope="col" data-i18n="th.actions">Actions</th>
+              <th scope="col"><span class="sr-only" data-i18n="th.actions">Actions</span></th>
             </tr>
           </thead>
-          <tbody id="tradesBody">
-            <tr class="table-empty-row" id="tableEmpty">
-              <td colspan="12">No trades yet. Add your first trade to get started.</td>
-            </tr>
-          </tbody>
+          <tbody id="tradesBody"></tbody>
         </table>
       </div>
 
       <!-- Table error banner -->
       <div class="table-error" id="tableError" hidden>
-        <span>Failed to load trades.</span>
-        <button class="btn-inline" id="retryBtn">Retry</button>
+        <span data-i18n="table.error">Failed to load trades.</span>
+        <button class="btn-inline" id="retryBtn" type="button" data-i18n="table.retry">Retry</button>
       </div>
     </section>
 
   </div><!-- /.content-left -->
+
 
   <!-- Calculator backdrop (mobile drawer) -->
   <div class="fib-backdrop" id="fibBackdrop" aria-hidden="true"></div>
@@ -984,28 +1114,28 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="fSymbol">Symbol <span class="required">*</span></label>
+            <label class="form-label" for="fSymbol"><span data-i18n="form.symbol">Symbol</span> <span class="required">*</span></label>
             <input class="input-field" type="text" id="fSymbol" name="symbol"
               placeholder="BTC/USDT" autocomplete="off" required />
           </div>
           <div class="form-group">
-            <label class="form-label" for="fSide">Side <span class="required">*</span></label>
+            <label class="form-label" for="fSide"><span data-i18n="form.side">Side</span> <span class="required">*</span></label>
             <select class="input-field" id="fSide" name="side" required>
-              <option value="">— Select —</option>
-              <option value="long">Long</option>
-              <option value="short">Short</option>
+              <option value="" data-i18n="form.side.ph">— Select —</option>
+              <option value="long" data-i18n="filter.long">Long</option>
+              <option value="short" data-i18n="filter.short">Short</option>
             </select>
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="fEntry">Entry Price <span class="required">*</span></label>
+            <label class="form-label" for="fEntry"><span data-i18n="form.entry">Entry Price</span> <span class="required">*</span></label>
             <input class="input-field" type="number" id="fEntry" name="entry_price"
               placeholder="0.00" min="0" step="any" required />
           </div>
           <div class="form-group">
-            <label class="form-label" for="fExit">Exit Price <span class="required">*</span></label>
+            <label class="form-label" for="fExit"><span data-i18n="form.exit">Exit Price</span> <span class="required">*</span></label>
             <input class="input-field" type="number" id="fExit" name="exit_price"
               placeholder="0.00" min="0" step="any" required />
           </div>
@@ -1013,69 +1143,69 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="fPnl">P&amp;L (after fees) <span class="required">*</span></label>
+            <label class="form-label" for="fPnl"><span data-i18n="form.pnl">P&amp;L (after fees)</span> <span class="required">*</span></label>
             <input class="input-field" type="number" id="fPnl" name="pnl"
-              placeholder="e.g. 42.50 or -18.00" step="any" required />
+              placeholder="e.g. 42.50 or -18.00" data-i18n-ph="form.pnl.ph" step="any" required />
           </div>
           <div class="form-group">
-            <label class="form-label" for="fRoe">ROE % <span class="required">*</span></label>
+            <label class="form-label" for="fRoe"><span data-i18n="form.roe">ROE %</span> <span class="required">*</span></label>
             <input class="input-field" type="number" id="fRoe" name="roe"
-              placeholder="e.g. 4.25 or -1.80" step="any" required />
+              placeholder="e.g. 4.25 or -1.80" data-i18n-ph="form.roe.ph" step="any" required />
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="fQty">
-              Quantity <span class="required">*</span>
-              <span id="qtyUnit" class="qty-unit">USDT</span>
+              <span data-i18n="form.qty">Quantity</span> <span class="required">*</span>
+              <span class="qty-unit">USDT</span>
             </label>
             <input class="input-field" type="number" id="fQty" name="quantity"
               placeholder="0.00" min="0" step="any" required />
-            <div class="qty-conversion" id="qtyConversion" style="display:none;">
+            <div class="qty-conversion" id="qtyConversion" hidden>
               ≈ <span id="qtyConverted">—</span>
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="fLeverage">Leverage <span class="optional">(optional)</span></label>
+            <label class="form-label" for="fLeverage"><span data-i18n="form.leverage">Leverage</span> <span class="optional" data-i18n="form.optional">(optional)</span></label>
             <input class="input-field" type="number" id="fLeverage" name="leverage"
-              placeholder="e.g. 10" min="1" step="1" />
+              placeholder="e.g. 10" data-i18n-ph="form.leverage.ph" min="1" step="1" />
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="fRR">Risk/Reward <span class="optional">(optional)</span></label>
+            <label class="form-label" for="fRR"><span data-i18n="form.rr">Risk/Reward</span> <span class="optional" data-i18n="form.optional">(optional)</span></label>
             <input class="input-field" type="number" id="fRR" name="rr"
-              placeholder="e.g. 2.5" min="0" step="any" />
+              placeholder="e.g. 2.5" data-i18n-ph="form.rr.ph" min="0" step="any" />
           </div>
           <div class="form-group">
-            <label class="form-label" for="fEntries">Entries <span class="optional">(optional)</span></label>
+            <label class="form-label" for="fEntries"><span data-i18n="form.entries">Entries</span> <span class="optional" data-i18n="form.optional">(optional)</span></label>
             <input class="input-field" type="number" id="fEntries" name="entries"
-              placeholder="e.g. 3" min="1" step="1" />
+              placeholder="e.g. 3" data-i18n-ph="form.entries.ph" min="1" step="1" />
           </div>
         </div>
 
-        <div class="leverage-display" id="leverageNotionalGroup" style="display:none;padding:0 0 8px 0;">
-          <span class="form-label">Real Capital: </span>
-          <span class="input-field leverage-calc" id="leverageNotional" style="display:inline;padding:2px 8px;">—</span>
+        <div class="leverage-display" id="leverageNotionalGroup" hidden>
+          <span class="form-label" data-i18n="form.realcapital">Real capital (margin)</span>
+          <span class="leverage-calc" id="leverageNotional">—</span>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label" for="fOpenTime">Open Time <span class="required">*</span></label>
+            <label class="form-label" for="fOpenTime"><span data-i18n="form.opentime">Open Time</span> <span class="required">*</span></label>
             <input class="input-field" type="datetime-local" id="fOpenTime" name="open_time" required />
           </div>
           <div class="form-group">
-            <label class="form-label" for="fCloseTime">Close Time <span class="required">*</span></label>
+            <label class="form-label" for="fCloseTime"><span data-i18n="form.closetime">Close Time</span> <span class="required">*</span></label>
             <input class="input-field" type="datetime-local" id="fCloseTime" name="close_time" required />
           </div>
         </div>
 
         <div class="form-group form-group--full">
-          <label class="form-label" for="fNotes">Notes <span class="optional">(optional)</span></label>
+          <label class="form-label" for="fNotes"><span data-i18n="form.notes">Notes</span> <span class="optional" data-i18n="form.optional">(optional)</span></label>
           <textarea class="input-field input-textarea" id="fNotes" name="notes"
-            placeholder="Trade rationale, setup type, lessons learned…" rows="3"></textarea>
+            placeholder="Trade rationale, setup type, lessons learned…" data-i18n-ph="form.notes.ph" rows="3"></textarea>
         </div>
 
         <div class="form-error" id="formError" hidden></div>
@@ -1113,10 +1243,10 @@
   <div class="modal-backdrop modal-backdrop--sm" id="confirmBackdrop" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
     <div class="modal modal--sm">
       <div class="modal-header">
-        <h2 class="modal-title" id="confirmTitle" data-i18n="confirm.title">Delete Trade</h2>
+        <h2 class="modal-title" id="confirmTitle">Delete Trade</h2>
         <button class="modal-close" id="confirmClose" aria-label="Close">&times;</button>
       </div>
-      <p class="confirm-message" data-i18n="confirm.msg">Are you sure you want to delete this trade? This action cannot be undone.</p>
+      <p class="confirm-message" id="confirmMsg">Are you sure you want to delete this trade? This action cannot be undone.</p>
       <div class="modal-footer">
         <button class="btn btn-ghost" id="confirmCancelBtn" data-i18n="confirm.cancel">Cancel</button>
         <button class="btn btn-danger" id="confirmDeleteBtn" data-i18n="confirm.delete">Delete</button>
@@ -1179,8 +1309,10 @@
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <script src="config.js?v=4"></script>
-  <script src="translations.js?v=3"></script>
-  <script src="app.js?v=14"></script>
+  <script src="translations.js?v=4"></script>
+  <script src="app.js?v=15"></script>
+  <script src="insights.js?v=1"></script>
+  <script src="market.js?v=1"></script>
   <script src="ladder.js?v=3"></script>
   <script src="paper.js?v=1"></script>
   <script src="exchanges.js?v=3"></script>
