@@ -35,6 +35,17 @@ Run with:
 
 from __future__ import annotations
 
+# Use the operating system's certificate store for outgoing HTTPS (Bitunix API,
+# market data). On Windows, antivirus HTTPS scanning re-signs traffic with its own
+# root certificate: Windows trusts it, Python's bundled list does not, and every
+# call fails with CERTIFICATE_VERIFY_FAILED. Verification stays ON; it just checks
+# against the same store the browser uses. Must run before anything opens a connection.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:  # not installed: keep Python's default certificate list
+    pass
+
 import csv
 import io
 from datetime import datetime
@@ -104,6 +115,8 @@ from market import router as market_router
 import paper  # paper trading tables + engine (imported before init_db so its tables are created)
 import hub  # position hub tables + poller (imported before init_db so its tables are created)
 import hub_ladder  # ladder planner/arm routes + reconcile (tables created with init_db)
+import user_settings  # per-user saved exchanges + optional fees (table created with init_db)
+import mission  # Mission Control summary across all accounts (table created with init_db)
 
 # ---------------------------------------------------------------------------
 # Application setup
@@ -132,6 +145,8 @@ app.include_router(market_router)
 app.include_router(paper.router)
 app.include_router(hub.router)
 app.include_router(hub_ladder.router)
+app.include_router(user_settings.router)
+app.include_router(mission.router)
 
 
 @app.on_event("startup")

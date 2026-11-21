@@ -139,6 +139,23 @@ class HubOrder(Base):
     last_seen_at  = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class HubFeed(Base):
+    """Heartbeat per source: when a feed last reported, even with zero open positions,
+    so Mission Control can tell "flat" from "not connected"."""
+    __tablename__ = "hub_feeds"
+    __table_args__ = (UniqueConstraint("user_id", "exchange", "device", "source",
+                                       name="ux_hub_feeds_scope"),)
+
+    id        = Column(Integer, primary_key=True, autoincrement=True)
+    user_id   = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    exchange  = Column(String(10), nullable=False)
+    device    = Column(String(40), nullable=False)
+    source    = Column(String(8), nullable=False)
+    last_at   = Column(DateTime, nullable=False, default=datetime.utcnow)
+    positions = Column(Integer, nullable=False, default=0)
+    orders    = Column(Integer, nullable=False, default=0)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Secret storage
 # ═══════════════════════════════════════════════════════════════════════════
@@ -376,6 +393,11 @@ def apply_state(db: Session, *, user_id: int, exchange: str, device: str, source
                         side=o["side"], kind=o["kind"], price=o.get("price"), qty=o["qty"],
                         filled_qty=o.get("filled_qty") or 0.0, status=o.get("status"),
                         tp_price=o.get("tp_price"), sl_price=o.get("sl_price")))
+    feed = db.query(HubFeed).filter_by(**scope).first()
+    if feed is None:
+        feed = HubFeed(**scope)
+        db.add(feed)
+    feed.last_at, feed.positions, feed.orders = now, len(positions), len(orders)
     db.commit()
 
 

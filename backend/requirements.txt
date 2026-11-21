@@ -9,3 +9,4 @@ psycopg2-binary>=2.9.9
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0,<6.0.0
 python-dateutil>=2.8.2
+truststore>=0.9.1; python_version >= "3.10"

@@ -21,6 +21,12 @@
  */
 (function () {
   'use strict';
+
+  // ── One-time setup (Tampermonkey) ─────────────────────────────────────────
+  // Fill these three, save, reload the exchange page once. They are copied into
+  // Tampermonkey's private storage (the exchange's own scripts cannot read it).
+  // device = the account name exactly as it appears in Mission Control, e.g. "KCEX Main".
+  const SETUP = { url: '', token: '', device: '' };
   if (window.__hubKcex && window.__hubKcex.stop) window.__hubKcex.stop();
 
   const INTERVAL_MS = 10000;
@@ -50,8 +56,10 @@
 
   // "BTC/USDT LongIsolated10X" or "BTC/USDTLongIsolated10X" (the space comes and goes)
   const QUOTE = '(USDT|USDC|USD)';
+  // "BTC" or a display name with the ticker in brackets: "GOLD(XAUT)" -> XAUT
+  const NAME = '(?:[A-Z0-9]+\\s*\\(\\s*)?([A-Z0-9]+)\\s*\\)?';
   function parsePosition(r) {
-    const m = (r['Perp.'] || '').match(new RegExp('^([A-Z0-9]+)\\s*\\/\\s*' + QUOTE + '\\s*(Long|Short)\\s*(Isolated|Cross)?\\s*(\\d+(?:\\.\\d+)?)\\s*[Xx]', 'i'));
+    const m = (r['Perp.'] || '').match(new RegExp('^' + NAME + '\\s*\\/\\s*' + QUOTE + '\\s*(Long|Short)\\s*(Isolated|Cross)?\\s*(\\d+(?:\\.\\d+)?)\\s*[Xx]', 'i'));
     const avg = num(r['Avg Entry Price']);
     const notional = num(r['Open Interest']);          // shown in USDT (notional)
     if (!m || !avg || !notional) return null;
@@ -81,7 +89,7 @@
   // (those are already covered by exitOrders, so they are skipped here). Plain limit
   // entries are read from a "Price" column when present, otherwise reported in `warnings`.
   function parseOrder(r, warnings) {
-    const m = (r['Perp.'] || '').match(new RegExp('^([A-Z0-9]+)\\s*\\/\\s*' + QUOTE, 'i'));
+    const m = (r['Perp.'] || '').match(new RegExp('^' + NAME + '\\s*\\/\\s*' + QUOTE, 'i'));
     if (!m) return null;
     const dir = (r['Direction'] || '').toLowerCase();
     const trig = r['Trigger Conditions'] || '';
@@ -115,7 +123,7 @@
   const stored = k => (typeof GM_getValue === 'function' ? GM_getValue(k) : undefined);
   const config = () => cfg || { url: stored('url'), token: stored('token'), device: stored('device') };
 
-  async function push() {
+  async function pushOnce() {
     const s = snapshot();
     if (s.error) return (api.last = { ok: false, at: Date.now(), error: s.error });
     const c = config();
@@ -132,6 +140,37 @@
     }
   }
 
+  // Status pill (bottom left of the exchange page) so a silent failure is visible:
+  // green = sent, red = the exact reason nothing was sent. Never shows the token.
+  function badge(last) {
+    try {
+      let el = document.getElementById('illustrade-hub-badge');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'illustrade-hub-badge';
+        el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483647;font:11px/1.4 system-ui,sans-serif;' +
+          'padding:3px 9px;border-radius:10px;color:#000;pointer-events:none;opacity:.92;max-width:60vw';
+        document.documentElement.appendChild(el);
+      }
+      let msg;
+      if (last.error) msg = last.error;
+      else if (last.status === 403) msg = 'server rejected the token (HTTP 403): check token, and HUB_INGEST_TOKEN / HUB_INGEST_USER_ID on the server';
+      else if (!last.ok) msg = 'server answered HTTP ' + last.status;
+      else msg = 'sent ' + last.positions + ' position(s)';
+      const ok = !last.error && last.ok;
+      el.style.background = ok ? '#39ff14' : '#ff5252';
+      el.textContent = 'Illustrade KCEX reader (' + ((config().device) || 'no account name') + '): ' + msg +
+        ' · ' + new Date(last.at || Date.now()).toLocaleTimeString();
+    } catch (e) { /* the page changed under us; next push retries */ }
+  }
+
+  async function push() {
+    const r = await pushOnce();
+    badge(r);
+    console.info('[Illustrade KCEX reader]', r);
+    return r;
+  }
+
   const api = {
     last: null,
     snapshot,
@@ -141,6 +180,13 @@
   };
   window.__hubKcex = api;
 
+  if (typeof GM_setValue === 'function') {
+    for (const k of ['url', 'token', 'device']) if (SETUP[k]) GM_setValue(k, SETUP[k]);
+  }
   const c0 = config();
   if (typeof GM_getValue === 'function' && c0.url && c0.token && c0.device) api.start();
+  else if (typeof GM_getValue === 'function') {
+    const missing = ['url', 'token', 'device'].filter(k => !c0[k]).join(', ');
+    setTimeout(() => badge({ ok: false, at: Date.now(), error: 'not configured: fill ' + missing + ' in SETUP, save, reload' }), 3000);
+  }
 })();

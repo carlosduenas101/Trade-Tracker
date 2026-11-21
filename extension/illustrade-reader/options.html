@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Illustrade Reader</title>
+<style>
+  body { font: 13px/1.45 system-ui, sans-serif; background: #0a0a0a; color: #e8ffe8; margin: 0; padding: 16px; min-width: 360px; }
+  h1 { font-size: 15px; letter-spacing: .12em; color: #39ff14; margin: 0 0 4px; }
+  p { color: #7aa87a; margin: 0 0 12px; font-size: 12px; }
+  label { display: block; margin: 10px 0 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #9fd49f; }
+  input { width: 100%; box-sizing: border-box; padding: 7px 9px; background: #111; color: #e8ffe8; border: 1px solid #2a4a2a; border-radius: 6px; font: inherit; }
+  .hint { font-size: 11px; color: #5c8a5c; margin-top: 3px; }
+  button { margin-top: 14px; width: 100%; padding: 8px; background: #39ff14; color: #000; border: 0; border-radius: 6px; font-weight: 700; cursor: pointer; }
+  #status { margin-top: 10px; font-size: 12px; min-height: 16px; }
+</style></head>
+<body>
+  <h1>ILLUSTRADE READER</h1>
+  <p>Sends the open positions shown on your KCEX and LBank futures pages to Mission Control.</p>
+  <label for="url">Server URL</label>
+  <input id="url" placeholder="https://trade-tracker-api-5e2o.onrender.com">
+  <label for="token">Ingest token</label>
+  <input id="token" type="password" placeholder="HUB_INGEST_TOKEN from backend\.env" autocomplete="off">
+  <div class="hint">Stored only in this browser profile. Leave blank to keep the saved one.</div>
+  <label for="kcex">KCEX account name in this browser</label>
+  <input id="kcex" placeholder="KCEX Main or KCEX 2">
+  <label for="lbank">LBank account name in this browser</label>
+  <input id="lbank" placeholder="LBank (leave blank if LBank is not used here)">
+  <div class="hint">Names must match the account cards in Mission Control exactly.</div>
+  <button id="save">Save</button>
+  <div id="status"></div>
+  <script src="options.js"></script>
+</body></html>

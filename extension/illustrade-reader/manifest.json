@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Illustrade Reader",
+  "version": "1.0.0",
+  "description": "Reads your open positions on the KCEX and LBank futures pages and sends them to Illustrade Mission Control.",
+  "permissions": ["storage"],
+  "options_page": "options.html",
+  "action": { "default_title": "Illustrade Reader settings", "default_popup": "options.html" },
+  "content_scripts": [
+    { "matches": ["https://www.lbank.com/futures/*"], "js": ["lbank_reader.js", "boot.js"], "run_at": "document_idle" },
+    { "matches": ["https://www.kcex.com/futures/*"],  "js": ["kcex_reader.js", "boot.js"],  "run_at": "document_idle" }
+  ]
+}

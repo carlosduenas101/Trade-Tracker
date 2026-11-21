@@ -1635,6 +1635,7 @@ function showApp(user) {
   document.getElementById('loginScreen').hidden = true;
   document.getElementById('userInfo').hidden = false;
   document.getElementById('userNameDisplay').textContent = user.username;
+  document.dispatchEvent(new CustomEvent('illustrade:login'));
 }
 
 async function doLogin(username, password) {
@@ -1692,6 +1693,7 @@ function doLogout() {
   state.trades = [];
   state.selectedIds.clear();
   state.tableFilter = { symbols: new Set(), side: '' };
+  document.dispatchEvent(new CustomEvent('illustrade:logout'));
   showLoginScreen();
 }
 
